@@ -4,11 +4,6 @@ api: "POST /orders/{id}/address/detail"
 ---
 
 Updates the detailed address information for an order.
-
-## Authentication
-
-This endpoint requires authentication.
-
 ## Path Parameters
 
 <ParamField path="id" type="string" required>
@@ -29,7 +24,7 @@ Returns no content on success.
 
 - `200 OK` - Address detail updated successfully
 - `400 Bad Request` - Invalid request body or validation errors
-- `401 Unauthorized` - Authentication required
+
 - `404 Not Found` - Order not found
 - `409 Conflict` - Order cannot be modified
 
@@ -66,7 +61,6 @@ This error occurs when attempting to modify an order that has already been paid 
 ```bash
 curl -X POST https://api.example.com/orders/order_abc123def456/address/detail \
   -H "Content-Type: application/json" \
-  -H "Authorization: Bearer YOUR_TOKEN" \
   -d '{
     "detail": "789 Pine Street, Building A, Suite 1200"
   }'

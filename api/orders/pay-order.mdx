@@ -4,11 +4,6 @@ api: "POST /orders/{id}/payment"
 ---
 
 Processes payment for an order. The paid amount must match the order's total price.
-
-## Authentication
-
-This endpoint requires authentication.
-
 ## Path Parameters
 
 <ParamField path="id" type="string" required>
@@ -29,7 +24,7 @@ Returns no content on success.
 
 - `200 OK` - Payment processed successfully
 - `400 Bad Request` - Invalid request body or validation errors
-- `401 Unauthorized` - Authentication required
+
 - `404 Not Found` - Order not found
 - `409 Conflict` - Payment amount doesn't match order price or order cannot be modified
 
@@ -78,7 +73,6 @@ This error occurs when attempting to pay an order that has already been paid or 
 ```bash
 curl -X POST https://api.example.com/orders/order_abc123def456/payment \
   -H "Content-Type: application/json" \
-  -H "Authorization: Bearer YOUR_TOKEN" \
   -d '{
     "paidPrice": 109.97
   }'

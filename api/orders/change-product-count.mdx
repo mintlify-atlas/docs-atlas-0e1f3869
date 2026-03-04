@@ -4,11 +4,6 @@ api: "POST /orders/{id}/products"
 ---
 
 Updates the quantity of a specific product within an order.
-
-## Authentication
-
-This endpoint requires authentication.
-
 ## Path Parameters
 
 <ParamField path="id" type="string" required>
@@ -33,7 +28,7 @@ Returns no content on success.
 
 - `200 OK` - Product count updated successfully
 - `400 Bad Request` - Invalid request body or validation errors
-- `401 Unauthorized` - Authentication required
+
 - `404 Not Found` - Order not found
 - `409 Conflict` - Order cannot be modified or product not in order
 
@@ -82,7 +77,6 @@ This error occurs when attempting to modify an order that has already been paid 
 ```bash
 curl -X POST https://api.example.com/orders/order_abc123def456/products \
   -H "Content-Type: application/json" \
-  -H "Authorization: Bearer YOUR_TOKEN" \
   -d '{
     "productId": "prod_123456",
     "count": 5

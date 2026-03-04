@@ -4,11 +4,6 @@ api: "GET /orders/{id}"
 ---
 
 Retrieves detailed information about a specific order.
-
-## Authentication
-
-This endpoint requires authentication.
-
 ## Path Parameters
 
 <ParamField path="id" type="string" required>
@@ -68,7 +63,7 @@ This endpoint requires authentication.
 ## Status Codes
 
 - `200 OK` - Order retrieved successfully
-- `401 Unauthorized` - Authentication required
+
 - `404 Not Found` - Order not found
 
 ## Error Responses
@@ -87,7 +82,7 @@ This endpoint requires authentication.
 
 ```bash
 curl -X GET https://api.example.com/orders/order_abc123def456 \
-  -H "Authorization: Bearer YOUR_TOKEN"
+  
 ```
 
 ## Example Response

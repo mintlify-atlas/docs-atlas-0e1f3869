@@ -4,11 +4,6 @@ api: "GET /orders"
 ---
 
 Retrieves a paginated list of orders.
-
-## Authentication
-
-This endpoint requires authentication.
-
 ## Query Parameters
 
 <ParamField query="pageIndex" type="integer" default="1">
@@ -78,13 +73,11 @@ Returns a paginated resource containing order summaries.
 ## Status Codes
 
 - `200 OK` - Orders retrieved successfully
-- `401 Unauthorized` - Authentication required
-
 ## Example Request
 
 ```bash
 curl -X GET "https://api.example.com/orders?pageIndex=1&pageSize=20" \
-  -H "Authorization: Bearer YOUR_TOKEN"
+  
 ```
 
 ## Example Response

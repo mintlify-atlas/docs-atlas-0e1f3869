@@ -4,11 +4,6 @@ api: "POST /orders"
 ---
 
 Creates a new order with the specified items and delivery address.
-
-## Authentication
-
-This endpoint requires authentication.
-
 ## Request Body
 
 <ParamField body="items" type="array" required>
@@ -53,8 +48,6 @@ This endpoint requires authentication.
 
 - `201 Created` - Order successfully created
 - `400 Bad Request` - Invalid request body or validation errors
-- `401 Unauthorized` - Authentication required
-
 ## Error Responses
 
 Validation errors will be returned with status 400 and include details about which fields failed validation:
@@ -70,7 +63,6 @@ Validation errors will be returned with status 400 and include details about whi
 ```bash
 curl -X POST https://api.example.com/orders \
   -H "Content-Type: application/json" \
-  -H "Authorization: Bearer YOUR_TOKEN" \
   -d '{
     "items": [
       {

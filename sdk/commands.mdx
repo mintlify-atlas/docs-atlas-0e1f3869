@@ -1,0 +1,211 @@
+---
+title: 'Command Classes'
+description: 'SDK command classes for order operations'
+---
+
+Command classes represent requests to create or modify orders. All commands include validation constraints to ensure data integrity.
+
+## CreateOrderCommand
+
+Command for creating a new order with items and shipping address.
+
+**Package**: `com.ecommerce.order.sdk.command.order`
+
+### Fields
+
+<ParamField path="items" type="List<OrderItemCommand>" required>
+  List of order items. Cannot be empty.
+  
+  **Validation**: `@NotEmpty` - "订单项不能为空" (Order items cannot be empty)
+</ParamField>
+
+<ParamField path="address" type="Address" required>
+  Shipping address for the order.
+  
+  **Validation**: `@NotNull` - "订单地址不能为空" (Order address cannot be empty)
+</ParamField>
+
+### Example
+
+```java
+import com.ecommerce.order.sdk.command.order.CreateOrderCommand;
+import com.ecommerce.order.sdk.command.order.OrderItemCommand;
+import com.ecommerce.shared.model.Address;
+import java.math.BigDecimal;
+import java.util.Arrays;
+
+// Create order items
+OrderItemCommand item1 = new OrderItemCommand(
+    "product-001",
+    2,
+    new BigDecimal("29.99")
+);
+
+OrderItemCommand item2 = new OrderItemCommand(
+    "product-002",
+    1,
+    new BigDecimal("49.99")
+);
+
+// Create shipping address
+Address address = new Address(
+    "John Doe",
+    "123 Main St",
+    "San Francisco",
+    "CA",
+    "94102"
+);
+
+// Create order command
+CreateOrderCommand command = new CreateOrderCommand(
+    Arrays.asList(item1, item2),
+    address
+);
+```
+
+---
+
+## OrderItemCommand
+
+Represents a single item within an order.
+
+**Package**: `com.ecommerce.order.sdk.command.order`
+
+### Fields
+
+<ParamField path="productId" type="String" required>
+  Unique identifier of the product.
+  
+  **Validation**: `@NotBlank` - "产品ID不能为空" (Product ID cannot be empty)
+</ParamField>
+
+<ParamField path="count" type="int" required>
+  Quantity of the product.
+  
+  **Validation**: `@Min(1)` - "产品数量必须大于0" (Product quantity must be greater than 0)
+</ParamField>
+
+<ParamField path="itemPrice" type="BigDecimal" required>
+  Unit price of the product.
+  
+  **Validation**: `@NotNull` - "产品单价不能为空" (Product unit price cannot be empty)
+</ParamField>
+
+### Example
+
+```java
+import com.ecommerce.order.sdk.command.order.OrderItemCommand;
+import java.math.BigDecimal;
+
+OrderItemCommand item = new OrderItemCommand(
+    "product-123",
+    3,
+    new BigDecimal("19.99")
+);
+```
+
+---
+
+## ChangeAddressDetailCommand
+
+Command for updating the detailed address of an existing order.
+
+**Package**: `com.ecommerce.order.sdk.command.order`
+
+### Fields
+
+<ParamField path="detail" type="String" required>
+  New detailed address string.
+  
+  **Validation**: `@NotNull` - "详细地址不能为空" (Detailed address cannot be empty)
+</ParamField>
+
+### Example
+
+```java
+import com.ecommerce.order.sdk.command.order.ChangeAddressDetailCommand;
+
+ChangeAddressDetailCommand command = new ChangeAddressDetailCommand(
+    "456 Oak Avenue, Apt 2B"
+);
+```
+
+---
+
+## ChangeProductCountCommand
+
+Command for updating the quantity of a specific product in an order.
+
+**Package**: `com.ecommerce.order.sdk.command.order`
+
+### Fields
+
+<ParamField path="productId" type="String" required>
+  ID of the product to update.
+  
+  **Validation**: `@NotBlank` - "产品ID不能为空" (Product ID cannot be empty)
+</ParamField>
+
+<ParamField path="count" type="int" required>
+  New quantity for the product.
+  
+  **Validation**: `@Min(1)` - "产品数量必须大于0" (Product quantity must be greater than 0)
+</ParamField>
+
+### Example
+
+```java
+import com.ecommerce.order.sdk.command.order.ChangeProductCountCommand;
+
+// Update product quantity to 5
+ChangeProductCountCommand command = new ChangeProductCountCommand(
+    "product-789",
+    5
+);
+```
+
+---
+
+## PayOrderCommand
+
+Command for processing payment for an order.
+
+**Package**: `com.ecommerce.order.sdk.command.order`
+
+### Fields
+
+<ParamField path="paidPrice" type="BigDecimal" required>
+  Amount paid by the customer.
+  
+  **Validation**: `@NotNull` - "支付金额不能为空" (Payment amount cannot be empty)
+</ParamField>
+
+### Example
+
+```java
+import com.ecommerce.order.sdk.command.order.PayOrderCommand;
+import java.math.BigDecimal;
+
+PayOrderCommand command = new PayOrderCommand(
+    new BigDecimal("109.97")
+);
+```
+
+---
+
+## Validation
+
+All command classes use Bean Validation (JSR 303) annotations. When using these commands with Spring Boot, validation is automatically performed when the `@Valid` annotation is present on controller method parameters.
+
+### Example with Spring Controller
+
+```java
+@PostMapping("/orders")
+public ResponseEntity<OrderRepresentation> createOrder(
+    @Valid @RequestBody CreateOrderCommand command
+) {
+    // If validation fails, Spring automatically returns 400 Bad Request
+    // with validation error details
+    return orderService.createOrder(command);
+}
+```

@@ -1,0 +1,376 @@
+---
+title: Configuration
+description: Configuration options for database, messaging, and application properties
+---
+
+The Ecommerce Order Service uses Spring Boot's configuration system with environment-specific YAML files.
+
+## Configuration Files
+
+Configuration is split across multiple files:
+
+```
+src/main/resources/
+├── application.yml           # Default configuration
+├── application-dev.yml       # Development environment
+└── application-ci.yml        # CI/CD environment
+```
+
+### Active Profile
+
+Set the active Spring profile using:
+
+<CodeGroup>
+```bash Environment Variable
+export SPRING_PROFILES_ACTIVE=dev
+```
+
+```bash JVM Argument
+java -Dspring.profiles.active=dev -jar app.jar
+```
+
+```yaml application.yml
+spring:
+  profiles:
+    active: dev
+```
+</CodeGroup>
+
+## Database Configuration
+
+MySQL connection settings from `application-dev.yml`:
+
+```yaml application-dev.yml
+spring:
+  datasource:
+    url: jdbc:mysql://localhost:13306/ecommerce_order_mysql?allowMultiQueries=true&useUnicode=true&characterEncoding=UTF-8&connectionCollation=utf8mb4_bin&useServerPrepStmts=false&rewriteBatchedStatements=true
+    driverClassName: com.mysql.cj.jdbc.Driver
+    username: root
+    password: root
+```
+
+### Connection Properties
+
+<ParamField path="url" type="string" required>
+  JDBC connection URL for MySQL database
+  
+  **Components:**
+  - Host: `localhost`
+  - Port: `13306` (non-standard to avoid conflicts)
+  - Database: `ecommerce_order_mysql`
+  
+  **Query Parameters:**
+  - `allowMultiQueries=true` - Enables multiple SQL statements
+  - `useUnicode=true` - Unicode character support
+  - `characterEncoding=UTF-8` - UTF-8 encoding
+  - `connectionCollation=utf8mb4_bin` - Binary collation for case-sensitive comparisons
+  - `useServerPrepStmts=false` - Disables server-side prepared statements
+  - `rewriteBatchedStatements=true` - Optimizes batch inserts
+</ParamField>
+
+<ParamField path="driverClassName" type="string" required>
+  MySQL JDBC driver class: `com.mysql.cj.jdbc.Driver`
+</ParamField>
+
+<ParamField path="username" type="string" required>
+  Database username (default: `root`)
+</ParamField>
+
+<ParamField path="password" type="string" required>
+  Database password (default: `root`)
+</ParamField>
+
+### Environment-Specific Settings
+
+<Tabs>
+  <Tab title="Development">
+    ```yaml
+    spring:
+      datasource:
+        url: jdbc:mysql://localhost:13306/ecommerce_order_mysql?...
+        username: root
+        password: root
+    ```
+    
+    Uses local MySQL started via Docker Compose.
+  </Tab>
+  
+  <Tab title="CI/CD">
+    Configure in `application-ci.yml` for your CI environment:
+    
+    ```yaml
+    spring:
+      datasource:
+        url: jdbc:mysql://ci-db-host:3306/ecommerce_order_mysql?...
+        username: ${DB_USERNAME}
+        password: ${DB_PASSWORD}
+    ```
+    
+    Use environment variables for credentials.
+  </Tab>
+  
+  <Tab title="Production">
+    Create `application-prod.yml`:
+    
+    ```yaml
+    spring:
+      datasource:
+        url: jdbc:mysql://${DB_HOST}:${DB_PORT}/ecommerce_order_mysql?...
+        username: ${DB_USERNAME}
+        password: ${DB_PASSWORD}
+        hikari:
+          maximum-pool-size: 20
+          minimum-idle: 5
+          connection-timeout: 30000
+    ```
+    
+    Add connection pool tuning for production.
+  </Tab>
+</Tabs>
+
+## RabbitMQ Configuration
+
+Event publishing is configured via `OrderRabbitmqConfig`:
+
+```java OrderRabbitmqConfig.java
+@Configuration
+public class OrderRabbitmqConfig {
+    
+    @Bean
+    public Binding bindToInventoryChanged() {
+        return new Binding(
+            properties.getReceiveQ(), 
+            QUEUE, 
+            "order-publish-x",              // Exchange name
+            "com.ecommerce.order.sdk.event.order.#",  // Routing key
+            null
+        );
+    }
+}
+```
+
+### RabbitMQ Properties
+
+Configure RabbitMQ connection in your YAML:
+
+```yaml
+spring:
+  rabbitmq:
+    host: localhost
+    port: 5672
+    username: guest
+    password: guest
+    virtual-host: /
+
+ecommerce:
+  rabbitmq:
+    receiveQ: order-receive-queue
+    exchange: order-publish-x
+```
+
+<ParamField path="spring.rabbitmq.host" type="string" default="localhost">
+  RabbitMQ server hostname
+</ParamField>
+
+<ParamField path="spring.rabbitmq.port" type="integer" default="5672">
+  RabbitMQ AMQP port
+</ParamField>
+
+<ParamField path="ecommerce.rabbitmq.exchange" type="string" default="order-publish-x">
+  Exchange name for publishing order events
+</ParamField>
+
+<ParamField path="ecommerce.rabbitmq.receiveQ" type="string">
+  Queue name for receiving events (CQRS pattern)
+</ParamField>
+
+## Application Properties
+
+Custom application configuration:
+
+```yaml application-dev.yml
+ecommerce:
+  order:
+    jwtSecret: whateversecret
+    jwtExpireMinutes: 30
+```
+
+<ParamField path="ecommerce.order.jwtSecret" type="string" required>
+  Secret key for JWT token generation and validation
+  
+  <Warning>
+  Use a strong secret in production. The development value is for testing only.
+  </Warning>
+</ParamField>
+
+<ParamField path="ecommerce.order.jwtExpireMinutes" type="integer" default="30">
+  JWT token expiration time in minutes
+</ParamField>
+
+## Logging Configuration
+
+### Log File Location
+
+```yaml application-dev.yml
+logging:
+  file: /var/log/ecommerce-order-backend/order-dev.log
+```
+
+### Log Levels
+
+Configure log levels for different packages:
+
+```yaml
+logging:
+  level:
+    root: INFO
+    com.ecommerce.order: DEBUG
+    org.springframework.web: DEBUG
+    org.hibernate.SQL: DEBUG
+    org.hibernate.type.descriptor.sql.BasicBinder: TRACE
+```
+
+<ParamField path="logging.level.com.ecommerce.order" type="string" default="INFO">
+  Log level for order service code (TRACE, DEBUG, INFO, WARN, ERROR)
+</ParamField>
+
+<ParamField path="logging.level.org.hibernate.SQL" type="string" default="INFO">
+  Set to DEBUG to see SQL queries
+</ParamField>
+
+## Build Information
+
+The service exposes build metadata via `/about` endpoint. These values are injected during build:
+
+```yaml application-dev.yml
+buildNumber: ${buildNumber}
+buildTime: ${buildTime}
+gitRevision: ${gitRevision}
+gitBranch: ${gitBranch}
+appName: ${appName}
+```
+
+These placeholders are replaced by the `gradle/version-info.gradle` script during build.
+
+## Docker Compose Configuration
+
+Local MySQL is configured via Docker Compose:
+
+```yaml gradle/docker-compose/docker-compose.yml
+version: '3'
+services:
+  mysql:
+    image: mysql:8.0
+    ports:
+      - "13306:3306"
+    environment:
+      MYSQL_DATABASE: ecommerce_order_mysql
+      MYSQL_ROOT_PASSWORD: root
+```
+
+Manage with Gradle tasks:
+
+```bash
+# Start MySQL
+./gradlew composeUp
+
+# Stop MySQL (preserves data)
+./gradlew composeDown
+
+# View logs
+./gradlew composeLog
+```
+
+## Environment Variables
+
+For production deployments, use environment variables:
+
+<Accordion title="Database Credentials">
+  ```bash
+  export DB_HOST=prod-mysql.example.com
+  export DB_PORT=3306
+  export DB_USERNAME=order_service
+  export DB_PASSWORD=secure_password
+  ```
+  
+  Reference in YAML:
+  
+  ```yaml
+  spring:
+    datasource:
+      url: jdbc:mysql://${DB_HOST}:${DB_PORT}/ecommerce_order_mysql
+      username: ${DB_USERNAME}
+      password: ${DB_PASSWORD}
+  ```
+</Accordion>
+
+<Accordion title="RabbitMQ Credentials">
+  ```bash
+  export RABBITMQ_HOST=prod-rabbitmq.example.com
+  export RABBITMQ_PORT=5672
+  export RABBITMQ_USERNAME=order_service
+  export RABBITMQ_PASSWORD=secure_password
+  ```
+</Accordion>
+
+<Accordion title="JWT Secret">
+  ```bash
+  export JWT_SECRET=your_256_bit_secret_key_here
+  ```
+  
+  ```yaml
+  ecommerce:
+    order:
+      jwtSecret: ${JWT_SECRET}
+  ```
+</Accordion>
+
+## Configuration Properties Class
+
+Custom properties are bound to a configuration class:
+
+```java OrderProperties.java
+@Configuration
+@ConfigurationProperties(prefix = "ecommerce.order")
+@Data
+public class OrderProperties {
+    private String jwtSecret;
+    private int jwtExpireMinutes;
+}
+```
+
+Access properties via dependency injection:
+
+```java
+@Service
+public class SomeService {
+    
+    @Autowired
+    private OrderProperties properties;
+    
+    public void doSomething() {
+        String secret = properties.getJwtSecret();
+    }
+}
+```
+
+## Best Practices
+
+<Tip>
+1. **Never commit secrets** - Use environment variables or secret management systems
+2. **Use profiles** - Separate configuration for dev, staging, production
+3. **Override via environment** - Use `SPRING_DATASOURCE_URL` to override `spring.datasource.url`
+4. **Validate on startup** - Use `@Validated` on configuration classes
+5. **Document defaults** - Comment all custom properties
+</Tip>
+
+## Next Steps
+
+<CardGroup cols={2}>
+  <Card title="Testing" icon="flask" href="/guides/testing">
+    Learn about the testing strategy
+  </Card>
+  <Card title="Deployment" icon="rocket" href="/guides/deployment">
+    Deploy to production
+  </Card>
+</CardGroup>

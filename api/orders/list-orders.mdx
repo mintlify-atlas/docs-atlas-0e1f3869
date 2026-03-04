@@ -1,0 +1,123 @@
+---
+title: "List Orders"
+api: "GET /orders"
+---
+
+Retrieves a paginated list of orders.
+
+## Authentication
+
+This endpoint requires authentication.
+
+## Query Parameters
+
+<ParamField query="pageIndex" type="integer" default="1">
+  The page number to retrieve (1-based indexing).
+</ParamField>
+
+<ParamField query="pageSize" type="integer" default="10">
+  The number of orders to return per page.
+</ParamField>
+
+## Response
+
+Returns a paginated resource containing order summaries.
+
+<ResponseField name="items" type="array">
+  List of order summaries for the requested page.
+  
+  <ResponseField name="id" type="string">
+    The unique identifier of the order.
+  </ResponseField>
+  
+  <ResponseField name="totalPrice" type="decimal">
+    The total price of the order.
+  </ResponseField>
+  
+  <ResponseField name="status" type="string">
+    The current status of the order.
+  </ResponseField>
+  
+  <ResponseField name="createdAt" type="timestamp">
+    The timestamp when the order was created.
+  </ResponseField>
+  
+  <ResponseField name="address" type="object">
+    The delivery address for the order.
+    
+    <ResponseField name="province" type="string">
+      Province or state.
+    </ResponseField>
+    
+    <ResponseField name="city" type="string">
+      City name.
+    </ResponseField>
+    
+    <ResponseField name="detail" type="string">
+      Detailed address information.
+    </ResponseField>
+  </ResponseField>
+</ResponseField>
+
+<ResponseField name="pageIndex" type="integer">
+  The current page number.
+</ResponseField>
+
+<ResponseField name="pageSize" type="integer">
+  The number of items per page.
+</ResponseField>
+
+<ResponseField name="totalCount" type="integer">
+  The total number of orders available.
+</ResponseField>
+
+<ResponseField name="totalPages" type="integer">
+  The total number of pages available.
+</ResponseField>
+
+## Status Codes
+
+- `200 OK` - Orders retrieved successfully
+- `401 Unauthorized` - Authentication required
+
+## Example Request
+
+```bash
+curl -X GET "https://api.example.com/orders?pageIndex=1&pageSize=20" \
+  -H "Authorization: Bearer YOUR_TOKEN"
+```
+
+## Example Response
+
+```json
+{
+  "items": [
+    {
+      "id": "order_abc123def456",
+      "totalPrice": 109.97,
+      "status": "CREATED",
+      "createdAt": "2026-03-04T10:30:00Z",
+      "address": {
+        "province": "California",
+        "city": "San Francisco",
+        "detail": "123 Market St, Suite 400"
+      }
+    },
+    {
+      "id": "order_xyz789uvw012",
+      "totalPrice": 299.99,
+      "status": "PAID",
+      "createdAt": "2026-03-03T15:45:00Z",
+      "address": {
+        "province": "New York",
+        "city": "New York",
+        "detail": "456 Broadway, Apt 12B"
+      }
+    }
+  ],
+  "pageIndex": 1,
+  "pageSize": 20,
+  "totalCount": 42,
+  "totalPages": 3
+}
+```

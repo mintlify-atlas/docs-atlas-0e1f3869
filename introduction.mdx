@@ -1,0 +1,209 @@
+---
+title: Introduction
+description: Welcome to the Ecommerce Order Service documentation
+mode: custom
+---
+
+<div className="relative overflow-hidden bg-gradient-to-br from-[#2563eb] via-[#1e40af] to-[#1e3a8a] dark:from-[#1e40af] dark:via-[#1e3a8a] dark:to-[#172554] py-20">
+  <div className="max-w-6xl mx-auto px-6 lg:px-8">
+    <div className="grid grid-cols-1 lg:grid-cols-12 gap-8 items-center">
+      <div className="lg:col-span-7">
+        <h1 className="text-4xl sm:text-5xl lg:text-6xl font-bold text-white mb-6">
+          Ecommerce Order Service
+        </h1>
+        <p className="text-lg sm:text-xl text-blue-100 max-w-2xl mb-8">
+          A production-ready REST API service for managing orders in e-commerce platforms with event-driven architecture, domain-driven design, and comprehensive testing.
+        </p>
+        <div className="flex flex-wrap gap-4">
+          <a 
+            href="/quickstart" 
+            className="inline-flex items-center px-6 py-3 bg-white text-[#2563eb] font-semibold rounded-lg hover:bg-blue-50 transition-colors no-underline"
+          >
+            Get started
+          </a>
+          <a 
+            href="/api/orders/create-order" 
+            className="inline-flex items-center px-6 py-3 border border-white/30 bg-white/10 text-white font-semibold rounded-lg hover:bg-white/20 transition-colors no-underline"
+          >
+            API Reference
+          </a>
+        </div>
+      </div>
+      <div className="lg:col-span-5 hidden lg:block">
+        <div className="relative">
+          <div className="absolute inset-0 bg-gradient-to-r from-blue-400 to-blue-600 rounded-lg blur-2xl opacity-20"></div>
+          <div className="relative bg-white/10 backdrop-blur-sm border border-white/20 rounded-lg p-6">
+            <div className="text-blue-100 text-sm font-mono">
+              <div className="mb-2 text-blue-200">POST /orders</div>
+              <div className="pl-4 border-l-2 border-blue-400/50">
+                <div>{"{"}</div>
+                <div className="pl-4">"items": [{"{"}"productId": "..."...{"}"}],</div>
+                <div className="pl-4">"address": {"{"}"...{"}"}</div>
+                <div>{"}"}</div>
+              </div>
+              <div className="mt-4 text-green-300">→ 201 Created</div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<div className="mt-16 mb-16 max-w-5xl mx-auto px-6">
+  <h2 className="text-3xl font-bold text-gray-900 dark:text-white mb-4">
+    Quick start
+  </h2>
+  <p className="text-base text-gray-600 dark:text-gray-400 mb-8">
+    Get your order service running in minutes
+  </p>
+  
+  <Steps>
+    <Step title="Clone and setup dependencies">
+      Clone the repository and ensure you have the required infrastructure running:
+      
+      ```bash
+      git clone https://github.com/e-commerce-sample/ecommerce-order-service.git
+      cd ecommerce-order-service
+      ```
+      
+      Start RabbitMQ and Zipkin from the devops repository (required for the full system).
+    </Step>
+    
+    <Step title="Run the service locally">
+      Use the provided script to start MySQL and run the service:
+      
+      ```bash
+      ./run.sh
+      ```
+      
+      The service will start on port 8080 with a debug port on 5005.
+    </Step>
+    
+    <Step title="Create your first order">
+      Send a POST request to create an order:
+      
+      ```bash
+      curl -X POST http://localhost:8080/orders \
+        -H "Content-Type: application/json" \
+        -d '{
+          "items": [
+            {
+              "productId": "product-123",
+              "count": 2,
+              "itemPrice": 29.99
+            }
+          ],
+          "address": {
+            "province": "California",
+            "city": "San Francisco",
+            "detail": "123 Market St"
+          }
+        }'
+      ```
+      
+      <Accordion title="Example response">
+        ```json
+        {
+          "id": "ORDER_20240304123456789"
+        }
+        ```
+      </Accordion>
+    </Step>
+    
+    <Step title="Query the order">
+      Retrieve the order details using the returned ID:
+      
+      ```bash
+      curl http://localhost:8080/orders/ORDER_20240304123456789
+      ```
+      
+      The response includes the order status, items, total price, and address.
+    </Step>
+  </Steps>
+</div>
+
+<div className="mt-16 mb-16 max-w-5xl mx-auto px-6">
+  <h2 className="text-3xl font-bold text-gray-900 dark:text-white mb-4">
+    Key features
+  </h2>
+  <p className="text-base text-gray-600 dark:text-gray-400 mb-8">
+    Built for production with modern patterns and comprehensive testing
+  </p>
+  
+  <CardGroup cols={2}>
+    <Card title="Event-driven architecture" icon="bolt" href="/concepts/events">
+      Built with RabbitMQ for reliable event publishing and CQRS pattern for query optimization
+    </Card>
+    <Card title="Domain-driven design" icon="cube" href="/concepts/architecture">
+      Clean domain model with aggregates, factories, and rich business logic encapsulation
+    </Card>
+    <Card title="Comprehensive testing" icon="flask" href="/guides/testing">
+      Multi-level testing strategy with unit, component, and API tests using JUnit 5 and Rest Assured
+    </Card>
+    <Card title="Java SDK included" icon="code" href="/sdk/installation">
+      Published SDK with commands, events, and models for seamless integration
+    </Card>
+    <Card title="RESTful API" icon="diagram-project" href="/api/orders/create-order">
+      Complete order lifecycle management through intuitive REST endpoints
+    </Card>
+    <Card title="Production ready" icon="check-circle" href="/guides/deployment">
+      Docker support, MySQL persistence, distributed tracing with Zipkin
+    </Card>
+  </CardGroup>
+</div>
+
+<div className="mt-16 mb-16 max-w-5xl mx-auto px-6">
+  <h2 className="text-3xl font-bold text-gray-900 dark:text-white mb-4">
+    Explore by topic
+  </h2>
+  <p className="text-base text-gray-600 dark:text-gray-400 mb-8">
+    Deep dive into architecture, APIs, and integration patterns
+  </p>
+  
+  <CardGroup cols={3}>
+    <Card title="Architecture" icon="sitemap" href="/concepts/architecture">
+      Understand the system design and component structure
+    </Card>
+    <Card title="Order lifecycle" icon="rotate" href="/concepts/order-lifecycle">
+      Learn how orders transition through states
+    </Card>
+    <Card title="Configuration" icon="sliders" href="/guides/configuration">
+      Configure database, messaging, and application properties
+    </Card>
+    <Card title="API reference" icon="book" href="/api/orders/create-order">
+      Complete REST API documentation with examples
+    </Card>
+    <Card title="SDK integration" icon="puzzle-piece" href="/sdk/commands">
+      Use the Java SDK in your microservices
+    </Card>
+    <Card title="Deployment" icon="rocket" href="/guides/deployment">
+      Deploy to staging and production environments
+    </Card>
+  </CardGroup>
+</div>
+
+<div className="mt-16 mb-16 max-w-5xl mx-auto px-6">
+  <div className="bg-gradient-to-r from-[#2563eb]/10 to-[#1e40af]/10 dark:from-[#1e40af]/20 dark:to-[#1e3a8a]/20 border border-[#2563eb]/20 dark:border-[#60a5fa]/20 rounded-2xl p-8">
+    <h2 className="text-2xl font-bold text-gray-900 dark:text-white mb-3">
+      Ready to build?
+    </h2>
+    <p className="text-base text-gray-600 dark:text-gray-400 mb-6">
+      Start integrating the order service into your e-commerce platform today.
+    </p>
+    <div className="flex flex-wrap gap-3">
+      <a 
+        href="/quickstart" 
+        className="inline-flex items-center px-5 py-2.5 bg-[#2563eb] text-white font-semibold rounded-lg hover:bg-[#1e40af] transition-colors no-underline"
+      >
+        Get started
+      </a>
+      <a 
+        href="https://github.com/e-commerce-sample/ecommerce-order-service" 
+        className="inline-flex items-center px-5 py-2.5 border border-gray-300 dark:border-gray-600 bg-white dark:bg-[#1a1d27] text-gray-900 dark:text-white font-semibold rounded-lg hover:bg-gray-50 dark:hover:bg-[#242838] transition-colors no-underline"
+      >
+        View on GitHub
+      </a>
+    </div>
+  </div>
+</div>

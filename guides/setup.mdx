@@ -1,0 +1,345 @@
+---
+title: Setup
+description: Development environment setup for the Ecommerce Order Service
+---
+
+This guide covers setting up your development environment to work with the Ecommerce Order Service.
+
+## Prerequisites
+
+Before you begin, ensure you have the following installed:
+
+<CardGroup cols={2}>
+  <Card title="Java 8+" icon="java">
+    JDK 8 or higher required
+  </Card>
+  <Card title="Gradle 5.6" icon="gear">
+    Build automation tool (wrapper included)
+  </Card>
+  <Card title="Docker" icon="docker">
+    For running MySQL, RabbitMQ, and Zipkin
+  </Card>
+  <Card title="Git" icon="code-branch">
+    Version control
+  </Card>
+</CardGroup>
+
+## Infrastructure Setup
+
+The service depends on shared infrastructure components from the devops repository.
+
+### Clone Devops Repository
+
+First, clone and setup the devops repository:
+
+```bash
+cd ~/projects
+git clone https://github.com/e-commerce-sample/ecommerce-devops.git
+cd ecommerce-devops
+```
+
+### Start RabbitMQ
+
+RabbitMQ is required for event publishing:
+
+```bash
+cd local/rabbitmq
+./start-rabbitmq.sh
+```
+
+<Note>
+RabbitMQ only needs to be started once for all Ecommerce microservices. It will continue running until you stop it.
+</Note>
+
+**Verify RabbitMQ is running:**
+
+- Management UI: http://localhost:15672
+- Username: `guest`
+- Password: `guest`
+
+### Start Zipkin
+
+Zipkin provides distributed tracing:
+
+```bash
+cd local/zipkin
+./start-zipkin.sh
+```
+
+**Verify Zipkin is running:**
+
+- Zipkin UI: http://localhost:9411
+
+<Tip>
+Keep RabbitMQ and Zipkin running in the background throughout your development session.
+</Tip>
+
+## Project Setup
+
+### Clone the Repository
+
+```bash
+cd ~/projects
+git clone https://github.com/e-commerce-sample/ecommerce-order-service.git
+cd ecommerce-order-service
+```
+
+### Project Structure
+
+The project is organized into two modules:
+
+```
+ecommerce-order-service/
+├── ecommerce-order-service-api/    # Main application
+│   ├── src/
+│   │   ├── main/java/              # Application code
+│   │   ├── test/java/              # Unit tests
+│   │   ├── componentTest/java/     # Component tests
+│   │   └── apiTest/java/           # API tests
+│   └── build.gradle
+├── ecommerce-order-service-sdk/     # Published SDK
+│   ├── src/main/java/
+│   └── build.gradle
+├── build.gradle                      # Root build file
+├── settings.gradle
+└── *.sh                              # Utility scripts
+```
+
+### Build the Project
+
+Use the Gradle wrapper to build:
+
+```bash
+./gradlew build
+```
+
+This will:
+
+1. Compile all source code
+2. Run unit tests
+3. Run component tests
+4. Run API tests
+5. Generate build artifacts
+
+<Note>
+The first build may take several minutes as Gradle downloads dependencies.
+</Note>
+
+## IDE Setup
+
+### IntelliJ IDEA
+
+The project includes a script to generate IntelliJ project files:
+
+```bash
+./idea.sh
+```
+
+This will:
+
+1. Generate IntelliJ IDEA project files
+2. Configure Gradle integration
+3. Automatically open IntelliJ IDEA
+
+**Manual Import:**
+
+If you prefer to import manually:
+
+1. Open IntelliJ IDEA
+2. File → Open
+3. Select the `ecommerce-order-service` directory
+4. Choose "Open as Gradle Project"
+
+### Lombok Configuration
+
+The project uses Lombok to reduce boilerplate code:
+
+1. Install the Lombok plugin in IntelliJ:
+   - Settings → Plugins → Search "Lombok" → Install
+2. Enable annotation processing:
+   - Settings → Build, Execution, Deployment → Compiler → Annotation Processors
+   - Check "Enable annotation processing"
+
+## Running the Service
+
+### Using the Run Script
+
+The simplest way to run the service:
+
+```bash
+./run.sh
+```
+
+This script will:
+
+1. Start MySQL via Docker Compose (port 13306)
+2. Wait for MySQL to be ready
+3. Start the Spring Boot application (port 8080)
+4. Enable remote debugging (port 5005)
+
+### Manual Start
+
+If you prefer to start components separately:
+
+<Steps>
+  <Step title="Start MySQL">
+    ```bash
+    ./gradlew composeUp
+    ```
+    
+    MySQL will start on port 13306.
+  </Step>
+  
+  <Step title="Run the application">
+    ```bash
+    ./gradlew bootRun
+    ```
+    
+    Or from IntelliJ, run the `Application` class.
+  </Step>
+</Steps>
+
+### Verify the Service
+
+Once started, verify the service is running:
+
+```bash
+curl http://localhost:8080/about
+```
+
+You should see service metadata in the response.
+
+## Development Workflow
+
+### Make Code Changes
+
+1. Edit code in your IDE
+2. Save changes
+3. Restart the application to see changes
+
+### Run Tests
+
+<Tabs>
+  <Tab title="All tests">
+    ```bash
+    ./gradlew test componentTest apiTest
+    ```
+  </Tab>
+  
+  <Tab title="Unit tests only">
+    ```bash
+    ./gradlew test
+    ```
+  </Tab>
+  
+  <Tab title="Component tests">
+    ```bash
+    ./gradlew componentTest
+    ```
+  </Tab>
+  
+  <Tab title="API tests">
+    ```bash
+    ./gradlew apiTest
+    ```
+  </Tab>
+</Tabs>
+
+### Clean and Rebuild
+
+```bash
+./gradlew clean build
+```
+
+## Debugging
+
+### Remote Debugging
+
+When you run the service with `./run.sh`, it listens on port 5005 for debugger connections.
+
+**IntelliJ IDEA Setup:**
+
+1. Run → Edit Configurations
+2. Add New Configuration → Remote JVM Debug
+3. Set host: `localhost`
+4. Set port: `5005`
+5. Click Debug to attach
+
+### Viewing Logs
+
+Logs are written to:
+
+- **Console**: stdout/stderr
+- **File**: `/var/log/ecommerce-order-backend/order-dev.log` (configured in application-dev.yml)
+
+```bash
+# Tail logs
+tail -f /var/log/ecommerce-order-backend/order-dev.log
+```
+
+## Common Issues
+
+<Accordion title="Port 8080 already in use">
+  Another application is using port 8080.
+  
+  **Solution:**
+  
+  Find and stop the process:
+  
+  ```bash
+  lsof -i :8080
+  kill -9 <PID>
+  ```
+</Accordion>
+
+<Accordion title="RabbitMQ connection refused">
+  RabbitMQ is not running or not accessible.
+  
+  **Solution:**
+  
+  1. Ensure RabbitMQ is started from devops repository
+  2. Verify it's accessible at `localhost:5672`
+  3. Check Docker containers: `docker ps | grep rabbitmq`
+</Accordion>
+
+<Accordion title="MySQL connection error">
+  MySQL container is not running or port 13306 is blocked.
+  
+  **Solution:**
+  
+  ```bash
+  # Check if MySQL is running
+  docker ps | grep mysql
+  
+  # Restart MySQL
+  ./gradlew composeDown
+  ./gradlew composeUp
+  ```
+</Accordion>
+
+<Accordion title="Build fails with 'Lombok not found'">
+  Lombok annotation processing is not enabled.
+  
+  **Solution:**
+  
+  1. Install Lombok plugin in your IDE
+  2. Enable annotation processing in IDE settings
+  3. Rebuild project: `./gradlew clean build`
+</Accordion>
+
+## Next Steps
+
+<CardGroup cols={2}>
+  <Card title="Configuration" icon="sliders" href="/guides/configuration">
+    Learn about configuration options
+  </Card>
+  <Card title="Testing" icon="flask" href="/guides/testing">
+    Understand the testing strategy
+  </Card>
+  <Card title="API Reference" icon="book" href="/api/orders/create-order">
+    Explore the REST API
+  </Card>
+  <Card title="Architecture" icon="sitemap" href="/concepts/architecture">
+    Understand the system design
+  </Card>
+</CardGroup>

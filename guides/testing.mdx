@@ -1,0 +1,512 @@
+---
+title: Testing
+description: Multi-level testing strategy with unit, component, and API tests
+---
+
+The Ecommerce Order Service implements a comprehensive testing strategy with three distinct test levels.
+
+## Testing Philosophy
+
+The project follows the testing pyramid:
+
+```
+        /\
+       /  \    API Tests (few)
+      /    \   End-to-end testing
+     /------\
+    /        \  Component Tests (some)
+   /          \ Integration testing
+  /------------\
+ /              \ Unit Tests (many)
+/                \ Fast, isolated tests
+```
+
+## Test Organization
+
+Tests are organized in separate source sets:
+
+```
+ecommerce-order-service-api/src/
+├── test/java/              # Unit tests
+├── componentTest/java/     # Component tests
+└── apiTest/java/           # API tests
+```
+
+Each source set has its own dependencies and runtime classpath.
+
+## Unit Tests
+
+### Purpose
+
+Test core domain logic in isolation:
+
+- Domain models (Order, OrderItem)
+- Factory classes (OrderFactory)
+- Business rules and invariants
+- Exception scenarios
+
+### Location
+
+```
+src/test/java/
+  com/ecommerce/order/
+    order/
+      model/
+        OrderTest.java
+        OrderItemTest.java
+      OrderFactoryTest.java
+```
+
+### Running Unit Tests
+
+<CodeGroup>
+```bash Gradle
+./gradlew test
+```
+
+```bash Gradle (with reports)
+./gradlew test --info
+```
+
+```bash IntelliJ
+# Right-click on test class or test directory
+# Select "Run Tests"
+```
+</CodeGroup>
+
+### Example Unit Test
+
+```java OrderTest.java
+@Test
+void should_calculate_total_price_when_create_order() {
+    OrderItem item1 = OrderItem.create("P1", 2, new BigDecimal("10.00"));
+    OrderItem item2 = OrderItem.create("P2", 3, new BigDecimal("20.00"));
+    
+    Order order = Order.create(
+        "ORDER_123",
+        Arrays.asList(item1, item2),
+        createAddress()
+    );
+    
+    assertEquals(new BigDecimal("80.00"), order.getTotalPrice());
+}
+
+@Test
+void should_throw_exception_when_change_paid_order() {
+    Order order = createPaidOrder();
+    
+    assertThrows(
+        OrderCannotBeModifiedException.class,
+        () -> order.changeProductCount("P1", 5)
+    );
+}
+```
+
+### Technologies
+
+- **JUnit 5** - Test framework
+- **Mockito** - Mocking framework
+- **AssertJ** - Fluent assertions
+
+## Component Tests
+
+### Purpose
+
+Test integration between components:
+
+- Repository operations with real database
+- Spring Data JPA functionality
+- Database queries and transactions
+- Entity mapping
+
+### Location
+
+```
+src/componentTest/java/
+  com/ecommerce/order/
+    BaseComponentTest.java
+    order/
+      OrderRepositoryComponentTest.java
+```
+
+### Running Component Tests
+
+<CodeGroup>
+```bash Gradle
+./gradlew componentTest
+```
+
+```bash With database cleanup
+./mysql-clean-local.sh
+./gradlew componentTest
+```
+</CodeGroup>
+
+<Note>
+Component tests require MySQL to be running. Use `./gradlew composeUp` to start MySQL if not already running.
+</Note>
+
+### Example Component Test
+
+```java OrderRepositoryComponentTest.java
+@SpringBootTest
+@Transactional
+class OrderRepositoryComponentTest extends BaseComponentTest {
+    
+    @Autowired
+    private OrderRepository orderRepository;
+    
+    @Test
+    void should_save_and_retrieve_order() {
+        Order order = createTestOrder();
+        
+        orderRepository.save(order);
+        
+        Optional<Order> retrieved = orderRepository.findById(order.getId());
+        assertTrue(retrieved.isPresent());
+        assertEquals(order.getTotalPrice(), retrieved.get().getTotalPrice());
+    }
+    
+    @Test
+    void should_support_pagination() {
+        // Create multiple orders
+        for (int i = 0; i < 15; i++) {
+            orderRepository.save(createTestOrder());
+        }
+        
+        PageRequest pageRequest = PageRequest.of(0, 10);
+        Page<Order> page = orderRepository.findAll(pageRequest);
+        
+        assertEquals(10, page.getContent().size());
+        assertEquals(15, page.getTotalElements());
+    }
+}
+```
+
+### Configuration
+
+Component tests use a separate configuration:
+
+```java BaseComponentTest.java
+@SpringBootTest
+@TestPropertySource(properties = {
+    "spring.datasource.url=jdbc:mysql://localhost:13306/ecommerce_order_mysql"
+})
+public abstract class BaseComponentTest {
+    // Shared test configuration
+}
+```
+
+## API Tests
+
+### Purpose
+
+Test the full HTTP API layer:
+
+- REST endpoint behavior
+- Request/response serialization
+- HTTP status codes
+- Error responses
+- End-to-end workflows
+
+### Location
+
+```
+src/apiTest/java/
+  com/ecommerce/order/
+    BaseApiTest.java
+    order/
+      OrderApiTest.java
+    about/
+      AboutControllerApiTest.java
+```
+
+### Running API Tests
+
+<CodeGroup>
+```bash Gradle
+./gradlew apiTest
+```
+
+```bash All tests in sequence
+./gradlew test componentTest apiTest
+```
+
+```bash Full build with all tests
+./local-build.sh
+```
+</CodeGroup>
+
+### Example API Test
+
+```java OrderApiTest.java
+@SpringBootTest(webEnvironment = RANDOM_PORT)
+class OrderApiTest extends BaseApiTest {
+    
+    @Test
+    void should_create_order() {
+        CreateOrderCommand command = CreateOrderCommand.builder()
+            .items(Arrays.asList(
+                new OrderItemCommand("P1", 2, new BigDecimal("10.00"))
+            ))
+            .address(createTestAddress())
+            .build();
+        
+        given()
+            .contentType(ContentType.JSON)
+            .body(command)
+        .when()
+            .post("/orders")
+        .then()
+            .statusCode(201)
+            .body("id", notNullValue());
+    }
+    
+    @Test
+    void should_return_404_when_order_not_found() {
+        given()
+            .contentType(ContentType.JSON)
+        .when()
+            .get("/orders/NONEXISTENT")
+        .then()
+            .statusCode(404)
+            .body("errorCode", equalTo("ORDER_NOT_FOUND"));
+    }
+    
+    @Test
+    void should_complete_order_workflow() {
+        // Create order
+        String orderId = createOrder();
+        
+        // Modify quantity
+        changeProductCount(orderId, "P1", 5);
+        
+        // Get updated order
+        OrderRepresentation order = getOrder(orderId);
+        assertEquals(new BigDecimal("50.00"), order.getTotalPrice());
+        
+        // Pay order
+        payOrder(orderId, new BigDecimal("50.00"));
+        
+        // Verify status changed
+        order = getOrder(orderId);
+        assertEquals("PAID", order.getStatus());
+    }
+}
+```
+
+### Technologies
+
+- **Rest Assured** - REST API testing DSL
+- **Spring MockMvc** - Spring MVC test support
+- **JsonPath** - JSON response parsing
+
+## Test Configuration
+
+Test tasks are configured in `build.gradle`:
+
+```gradle build.gradle
+sourceSets {
+    componentTest {
+        compileClasspath += sourceSets.main.output + sourceSets.test.output
+        runtimeClasspath += sourceSets.main.output + sourceSets.test.output
+    }
+
+    apiTest {
+        compileClasspath += sourceSets.main.output + sourceSets.test.output
+        runtimeClasspath += sourceSets.main.output + sourceSets.test.output
+    }
+}
+
+task componentTest(type: Test) {
+    description = 'Run component tests.'
+    group = 'verification'
+    testClassesDirs = sourceSets.componentTest.output.classesDirs
+    classpath = sourceSets.componentTest.runtimeClasspath
+    shouldRunAfter test
+}
+
+task apiTest(type: Test) {
+    description = 'Run API tests.'
+    group = 'verification'
+    testClassesDirs = sourceSets.apiTest.output.classesDirs
+    classpath = sourceSets.apiTest.runtimeClasspath
+    shouldRunAfter componentTest
+}
+
+check.dependsOn componentTest
+check.dependsOn apiTest
+```
+
+## Running All Tests
+
+The `local-build.sh` script runs all tests:
+
+```bash
+./local-build.sh
+```
+
+This will:
+
+1. Start MySQL (if not running)
+2. Run unit tests
+3. Run component tests
+4. Run API tests
+5. Generate coverage reports
+
+## Test Coverage
+
+### JaCoCo Configuration
+
+The project uses JaCoCo for code coverage:
+
+```bash
+# Run tests with coverage
+./gradlew test jacocoTestReport
+
+# View report
+open ecommerce-order-service-api/build/reports/jacoco/test/html/index.html
+```
+
+### Coverage Goals
+
+- **Domain Model**: 90%+ coverage
+- **Application Services**: 80%+ coverage
+- **Controllers**: 70%+ coverage (covered by API tests)
+
+## Database Management for Tests
+
+### Clean Database
+
+Between test runs, clean the database:
+
+```bash
+./mysql-clean-local.sh
+```
+
+This script:
+
+1. Connects to local MySQL
+2. Drops all tables
+3. Recreates schema
+
+### Login to Database
+
+Inspect test data manually:
+
+```bash
+./mysql-login-local.sh
+```
+
+Then run SQL queries:
+
+```sql
+USE ecommerce_order_mysql;
+SELECT * FROM orders;
+```
+
+## Continuous Integration
+
+Tests run automatically in CI:
+
+```yaml .github/workflows/ci.yml
+steps:
+  - name: Start MySQL
+    run: docker-compose up -d mysql
+    
+  - name: Run tests
+    run: ./gradlew test componentTest apiTest
+    
+  - name: Upload coverage
+    uses: codecov/codecov-action@v1
+```
+
+## Writing Good Tests
+
+### Best Practices
+
+<Tip>
+1. **Test one thing** - Each test should verify a single behavior
+2. **Clear names** - Use `should_do_something_when_condition`
+3. **Arrange-Act-Assert** - Structure tests with clear sections
+4. **No logic** - Tests should be simple and readable
+5. **Independent** - Tests should not depend on each other
+6. **Fast** - Keep unit tests fast (< 100ms each)
+</Tip>
+
+### Test Data Builders
+
+Create helper methods for test data:
+
+```java TestDataBuilder.java
+public class TestDataBuilder {
+    
+    public static Order createTestOrder() {
+        return Order.create(
+            "ORDER_" + System.currentTimeMillis(),
+            Arrays.asList(createTestOrderItem()),
+            createTestAddress()
+        );
+    }
+    
+    public static OrderItem createTestOrderItem() {
+        return OrderItem.create(
+            "PRODUCT_123",
+            2,
+            new BigDecimal("29.99")
+        );
+    }
+    
+    public static Address createTestAddress() {
+        return Address.builder()
+            .province("California")
+            .city("San Francisco")
+            .detail("123 Market St")
+            .build();
+    }
+}
+```
+
+## Debugging Tests
+
+### Run Single Test
+
+```bash
+# Run specific test class
+./gradlew test --tests OrderTest
+
+# Run specific test method
+./gradlew test --tests OrderTest.should_calculate_total_price
+```
+
+### Debug in IntelliJ
+
+1. Right-click on test method
+2. Select "Debug 'test method name'"
+3. Set breakpoints as needed
+
+### View Test Reports
+
+After running tests, view HTML reports:
+
+```bash
+# Unit test report
+open ecommerce-order-service-api/build/reports/tests/test/index.html
+
+# Component test report
+open ecommerce-order-service-api/build/reports/tests/componentTest/index.html
+
+# API test report
+open ecommerce-order-service-api/build/reports/tests/apiTest/index.html
+```
+
+## Next Steps
+
+<CardGroup cols={2}>
+  <Card title="Deployment" icon="rocket" href="/guides/deployment">
+    Deploy to production
+  </Card>
+  <Card title="Architecture" icon="sitemap" href="/concepts/architecture">
+    Understand the system design
+  </Card>
+</CardGroup>

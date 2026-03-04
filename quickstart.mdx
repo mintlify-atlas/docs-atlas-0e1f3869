@@ -1,80 +1,392 @@
 ---
-title: "Quickstart"
-description: "Start building awesome documentation in minutes"
+title: Quickstart Guide
+description: Get the Ecommerce Order Service running locally and make your first API calls
 ---
 
-## Get started in three steps
+This guide will help you set up the Ecommerce Order Service on your local machine and walk you through creating and managing orders via the REST API.
 
-Get your documentation site running locally and make your first customization.
+## Prerequisites
 
-### Step 1: Set up your local environment
+Before you begin, ensure you have the following installed:
 
-<AccordionGroup>
-  <Accordion icon="copy" title="Clone your docs locally">
-    During the onboarding process, you created a GitHub repository with your docs content if you didn't already have one. You can find a link to this repository in your [dashboard](https://dashboard.mintlify.com).
+- Java 8 or higher
+- Docker (for MySQL and RabbitMQ)
+- Gradle (or use the included Gradle wrapper)
+- Git
+
+## Setup Infrastructure
+
+The Order Service depends on RabbitMQ and Zipkin for messaging and distributed tracing. You'll need to set these up first.
+
+<Steps>
+  <Step title="Clone the devops repository">
+    ```bash
+    git clone https://github.com/e-commerce-sample/ecommerce-devops.git
+    cd ecommerce-devops
+    ```
+  </Step>
+
+  <Step title="Start RabbitMQ">
+    ```bash
+    cd local/rabbitmq
+    ./start-rabbitmq.sh
+    ```
     
-    To clone the repository locally so that you can make and preview changes to your docs, follow the [Cloning a repository](https://docs.github.com/en/repositories/creating-and-managing-repositories/cloning-a-repository) guide in the GitHub docs.
-  </Accordion>
-  <Accordion icon="rectangle-terminal" title="Start the preview server">
-    1. Install the Mintlify CLI: `npm i -g mint`
-    2. Navigate to your docs directory and run: `mint dev`
-    3. Open `http://localhost:3000` to see your docs live!
+    <Note>
+      RabbitMQ only needs to be started once for all Ecommerce services. It will run on port 5672.
+    </Note>
+  </Step>
+
+  <Step title="Start Zipkin">
+    ```bash
+    cd ../zipkin
+    ./start-zipkin.sh
+    ```
     
-    <Tip>Your preview updates automatically as you edit files.</Tip>
-  </Accordion>
-</AccordionGroup>
+    <Note>
+      Zipkin provides distributed tracing capabilities. It only needs to be started once for all services.
+    </Note>
+  </Step>
+</Steps>
 
-### Step 2: Deploy your changes
+## Run the Service Locally
 
-<AccordionGroup>
-  <Accordion icon="github" title="Install our GitHub app">
-    Install the Mintlify GitHub app from your [dashboard](https://dashboard.mintlify.com/settings/organization/github-app).
+<Steps>
+  <Step title="Clone the repository">
+    ```bash
+    git clone https://github.com/e-commerce-sample/ecommerce-order-service.git
+    cd ecommerce-order-service
+    ```
+  </Step>
+
+  <Step title="Start the service">
+    ```bash
+    ./run.sh
+    ```
     
-    Our GitHub app automatically deploys your changes to your docs site, so you don't need to manage deployments yourself.
-</Accordion>
-<Accordion icon="palette" title="Update your site name and colors">
-    For a first change, let's update the name and colors of your docs site.
+    This script will:
+    - Clean the build directory
+    - Start a local MySQL database using Docker Compose (port 13306)
+    - Launch the Spring Boot application on port 8080
+    - Enable remote debugging on port 5005
+  </Step>
 
-    1. Open `docs.json` in your editor.
-    2. Change the `"name"` field to your project name.
-    3. Update the `"colors"` to match your brand.
-    4. Save and see your changes instantly at `http://localhost:3000`.
+  <Step title="Verify the service is running">
+    ```bash
+    curl http://localhost:8080/actuator/health
+    ```
+    
+    You should see a response indicating the service is up:
+    ```json
+    {"status":"UP"}
+    ```
+  </Step>
+</Steps>
 
-    <Tip>Try changing the primary color to see an immediate difference!</Tip>
-  </Accordion>
-</AccordionGroup>
+## Configuration
 
-### Step 3: Go live
+The service runs with the `local` profile by default, which uses these settings:
 
-<Accordion icon="rocket" title="Publish your docs">
-  1. Commit and push your changes.
-  2. Your docs will update and be live in moments!
-</Accordion>
+<CodeGroup>
+```yaml Database
+spring:
+  datasource:
+    url: jdbc:mysql://localhost:13306/ecommerce_order_mysql
+    username: root
+    password: root
+```
 
-## Next steps
+```yaml RabbitMQ
+spring:
+  rabbitmq:
+    host: localhost
+    port: 5672
+    virtual-host: /
+    username: rabbitmq-user
+    password: rabbitmq-password
+```
 
-Now that you have your docs running, explore these key features:
+```yaml Service
+server:
+  port: 8080
 
-<CardGroup cols={2}>
+ecommerce:
+  order:
+    jwtSecret: whateversecret
+    jwtExpireMinutes: 30
+```
+</CodeGroup>
 
-<Card title="Write Content" icon="pen-to-square" href="/essentials/markdown">
-  Learn MDX syntax and start writing your documentation.
-</Card>
+## Make Your First API Call
 
-<Card title="Customize style" icon="palette" href="/essentials/settings">
-  Make your docs match your brand perfectly.
-</Card>
+Now that the service is running, let's create an order.
 
-<Card title="Add code examples" icon="square-code" href="/essentials/code">
-  Include syntax-highlighted code blocks.
-</Card>
+### Create an Order
 
-<Card title="API documentation" icon="code" href="/api-reference/introduction">
-  Auto-generate API docs from OpenAPI specs.
-</Card>
+<CodeGroup>
+```bash cURL
+curl -X POST http://localhost:8080/orders \
+  -H "Content-Type: application/json" \
+  -d '{
+    "items": [
+      {
+        "productId": "12345",
+        "count": 2,
+        "itemPrice": 20.00
+      }
+    ],
+    "address": {
+      "province": "四川",
+      "city": "成都",
+      "detail": "天府软件园1号"
+    }
+  }'
+```
 
-</CardGroup>
+```json Response
+{
+  "id": "a1b2c3d4-e5f6-7890-abcd-ef1234567890"
+}
+```
+</CodeGroup>
+
+The response includes the newly created order ID. Save this ID for the next steps.
 
 <Note>
-  **Need help?** See our [full documentation](https://mintlify.com/docs) or join our [community](https://mintlify.com/community).
+  The `items` array must contain at least one item. Each item requires:
+  - `productId`: A unique product identifier (string)
+  - `count`: Quantity (must be at least 1)
+  - `itemPrice`: Unit price (decimal)
 </Note>
+
+### Retrieve an Order
+
+Use the order ID from the previous step:
+
+<CodeGroup>
+```bash cURL
+curl http://localhost:8080/orders/{orderId}
+```
+
+```json Response
+{
+  "id": "a1b2c3d4-e5f6-7890-abcd-ef1234567890",
+  "items": [
+    {
+      "productId": "12345",
+      "count": 2,
+      "itemPrice": 20.00
+    }
+  ],
+  "totalPrice": 40.00,
+  "address": {
+    "province": "四川",
+    "city": "成都",
+    "detail": "天府软件园1号"
+  },
+  "status": "CREATED"
+}
+```
+</CodeGroup>
+
+### List All Orders
+
+Retrieve a paginated list of orders:
+
+<CodeGroup>
+```bash cURL
+curl "http://localhost:8080/orders?pageIndex=1&pageSize=10"
+```
+
+```json Response
+{
+  "pageIndex": 1,
+  "pageSize": 10,
+  "totalPages": 1,
+  "totalElements": 5,
+  "resource": [
+    {
+      "id": "a1b2c3d4-e5f6-7890-abcd-ef1234567890",
+      "totalPrice": 40.00,
+      "status": "CREATED"
+    }
+  ]
+}
+```
+</CodeGroup>
+
+### Update Product Count
+
+Change the quantity of a product in an order:
+
+<CodeGroup>
+```bash cURL
+curl -X POST http://localhost:8080/orders/{orderId}/products \
+  -H "Content-Type: application/json" \
+  -d '{
+    "productId": "12345",
+    "count": 5
+  }'
+```
+
+```text Response
+200 OK
+```
+</CodeGroup>
+
+The total price will be automatically recalculated based on the new count.
+
+### Pay for an Order
+
+Submit a payment for an order:
+
+<CodeGroup>
+```bash cURL
+curl -X POST http://localhost:8080/orders/{orderId}/payment \
+  -H "Content-Type: application/json" \
+  -d '{
+    "paidPrice": 100.00
+  }'
+```
+
+```text Response
+200 OK
+```
+</CodeGroup>
+
+After successful payment, the order status will change to `PAID`.
+
+### Update Delivery Address
+
+Change the detailed address for an order:
+
+<CodeGroup>
+```bash cURL
+curl -X POST http://localhost:8080/orders/{orderId}/address/detail \
+  -H "Content-Type: application/json" \
+  -d '{
+    "detail": "天府软件园2号"
+  }'
+```
+
+```text Response
+200 OK
+```
+</CodeGroup>
+
+## Available API Endpoints
+
+Here's a summary of all available endpoints:
+
+| Method | Endpoint | Description |
+|--------|----------|-------------|
+| POST | `/orders` | Create a new order |
+| GET | `/orders/{id}` | Retrieve an order by ID |
+| GET | `/orders` | List orders (paginated) |
+| POST | `/orders/{id}/products` | Update product count |
+| POST | `/orders/{id}/payment` | Pay for an order |
+| POST | `/orders/{id}/address/detail` | Update delivery address detail |
+
+## Useful Commands
+
+<Accordion title="Build and Test">
+  Run the full build with all tests:
+  ```bash
+  ./local-build.sh
+  ```
+  
+  This will:
+  - Stop any existing Docker containers
+  - Clean the build directory
+  - Run unit tests, component tests, and API tests
+  - Build the application
+</Accordion>
+
+<Accordion title="Database Management">
+  **Stop MySQL and clear data:**
+  ```bash
+  ./gradlew composeDown
+  ```
+  
+  **Clear MySQL data without stopping:**
+  ```bash
+  ./mysql-clean-local.sh
+  ```
+  
+  **Login to MySQL:**
+  ```bash
+  ./mysql-login-local.sh
+  ```
+  
+  **Manually start MySQL:**
+  ```bash
+  ./gradlew composeUp
+  ```
+</Accordion>
+
+<Accordion title="Development Tools">
+  **Generate IntelliJ IDEA project:**
+  ```bash
+  ./idea.sh
+  ```
+  This will automatically open the project in IntelliJ IDEA.
+  
+  **Remote debugging:**
+  The service is configured to listen on port 5005 for remote debugging. Configure your IDE to connect to `localhost:5005`.
+</Accordion>
+
+## Next Steps
+
+Now that you have the service running locally, you can:
+
+- Explore the [API Reference](/api-reference) for detailed endpoint documentation
+- Learn about the [architecture and design patterns](/architecture) used in the service
+- Set up [integration with other services](/integrations) like Product and Inventory services
+- Deploy the service to different environments using the [deployment guide](/deployment)
+
+## Troubleshooting
+
+<Accordion title="Port already in use">
+  If you see an error about port 8080 or 13306 being in use:
+  
+  1. Check if another instance is running:
+     ```bash
+     lsof -i :8080
+     lsof -i :13306
+     ```
+  
+  2. Stop the conflicting service or change the port in `application-local.yml`
+</Accordion>
+
+<Accordion title="RabbitMQ connection failed">
+  Ensure RabbitMQ is running:
+  ```bash
+  docker ps | grep rabbitmq
+  ```
+  
+  If it's not running, restart it from the devops repository:
+  ```bash
+  cd ecommerce-devops/local/rabbitmq
+  ./start-rabbitmq.sh
+  ```
+</Accordion>
+
+<Accordion title="MySQL connection issues">
+  The service automatically starts MySQL via Docker Compose. If you encounter issues:
+  
+  1. Check Docker is running:
+     ```bash
+     docker ps
+     ```
+  
+  2. Manually start the database:
+     ```bash
+     ./gradlew composeUp
+     ```
+  
+  3. Check the logs for errors:
+     ```bash
+     ./gradlew composeDown
+     ./gradlew composeUp
+     ```
+</Accordion>

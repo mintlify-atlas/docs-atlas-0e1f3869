@@ -1,0 +1,101 @@
+---
+title: "Create Order"
+api: "POST /orders"
+---
+
+Creates a new order with the specified items and delivery address.
+
+## Authentication
+
+This endpoint requires authentication.
+
+## Request Body
+
+<ParamField body="items" type="array" required>
+  List of order items. Cannot be empty.
+  
+  <ParamField body="productId" type="string" required>
+    The ID of the product to order.
+  </ParamField>
+  
+  <ParamField body="count" type="integer" required>
+    The quantity of the product. Must be at least 1.
+  </ParamField>
+  
+  <ParamField body="itemPrice" type="decimal" required>
+    The unit price of the product.
+  </ParamField>
+</ParamField>
+
+<ParamField body="address" type="object" required>
+  The delivery address for the order.
+  
+  <ParamField body="province" type="string" required>
+    Province or state.
+  </ParamField>
+  
+  <ParamField body="city" type="string" required>
+    City name.
+  </ParamField>
+  
+  <ParamField body="detail" type="string" required>
+    Detailed address information.
+  </ParamField>
+</ParamField>
+
+## Response
+
+<ResponseField name="id" type="string">
+  The unique identifier of the newly created order.
+</ResponseField>
+
+## Status Codes
+
+- `201 Created` - Order successfully created
+- `400 Bad Request` - Invalid request body or validation errors
+- `401 Unauthorized` - Authentication required
+
+## Error Responses
+
+Validation errors will be returned with status 400 and include details about which fields failed validation:
+
+- "订单项不能为空" - Order items cannot be empty
+- "产品ID不能为空" - Product ID cannot be blank
+- "产品数量必须大于0" - Product count must be greater than 0
+- "产品单价不能为空" - Item price cannot be null
+- "订单地址不能为空" - Order address cannot be null
+
+## Example Request
+
+```bash
+curl -X POST https://api.example.com/orders \
+  -H "Content-Type: application/json" \
+  -H "Authorization: Bearer YOUR_TOKEN" \
+  -d '{
+    "items": [
+      {
+        "productId": "prod_123456",
+        "count": 2,
+        "itemPrice": 29.99
+      },
+      {
+        "productId": "prod_789012",
+        "count": 1,
+        "itemPrice": 49.99
+      }
+    ],
+    "address": {
+      "province": "California",
+      "city": "San Francisco",
+      "detail": "123 Market St, Suite 400"
+    }
+  }'
+```
+
+## Example Response
+
+```json
+{
+  "id": "order_abc123def456"
+}
+```

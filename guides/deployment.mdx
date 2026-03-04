@@ -1,0 +1,566 @@
+---
+title: Deployment
+description: Deploy the Ecommerce Order Service to staging and production environments
+---
+
+This guide covers deploying the Ecommerce Order Service to various environments.
+
+## Deployment Overview
+
+The service is packaged as a Spring Boot executable JAR with embedded Tomcat.
+
+```
+┌──────────────────────────────────────┐
+│                                        │
+│        Spring Boot Application        │
+│                                        │
+│  ┌──────────────────────────────┐  │
+│  │   Embedded Tomcat (8080)   │  │
+│  └──────────────────────────────┘  │
+│                                        │
+└──────────────────────────────────────┘
+           │             │
+           ▼             ▼
+       ┌────────┐  ┌──────────┐
+       │ MySQL  │  │ RabbitMQ │
+       └────────┘  └──────────┘
+```
+
+## Building for Production
+
+### Create Executable JAR
+
+```bash
+./gradlew clean build
+```
+
+This creates:
+
+```
+ecommerce-order-service-api/build/libs/
+  ecommerce-order-service-api-0.1-SNAPSHOT.jar
+```
+
+### Build Properties
+
+The JAR includes:
+
+- **Launch script** - Enables running as a Linux service
+- **Version info** - Git revision, build time, branch
+- **Dependencies** - All runtime dependencies bundled
+
+```gradle build.gradle
+bootJar {
+    launchScript()  // Makes JAR executable on Linux
+}
+```
+
+## Environment Configuration
+
+### Production Configuration
+
+Create `application-prod.yml`:
+
+```yaml application-prod.yml
+spring:
+  datasource:
+    url: jdbc:mysql://${DB_HOST}:${DB_PORT}/ecommerce_order_mysql?allowMultiQueries=true&useUnicode=true&characterEncoding=UTF-8
+    username: ${DB_USERNAME}
+    password: ${DB_PASSWORD}
+    hikari:
+      maximum-pool-size: 20
+      minimum-idle: 5
+      connection-timeout: 30000
+      idle-timeout: 600000
+      max-lifetime: 1800000
+
+  rabbitmq:
+    host: ${RABBITMQ_HOST}
+    port: ${RABBITMQ_PORT:5672}
+    username: ${RABBITMQ_USERNAME}
+    password: ${RABBITMQ_PASSWORD}
+
+ecommerce:
+  order:
+    jwtSecret: ${JWT_SECRET}
+    jwtExpireMinutes: ${JWT_EXPIRE_MINUTES:60}
+
+logging:
+  level:
+    root: INFO
+    com.ecommerce.order: INFO
+  file: /var/log/ecommerce-order-backend/order-prod.log
+```
+
+### Environment Variables
+
+Set these environment variables:
+
+```bash .env
+# Database
+DB_HOST=prod-mysql.example.com
+DB_PORT=3306
+DB_USERNAME=order_service
+DB_PASSWORD=<secure_password>
+
+# RabbitMQ
+RABBITMQ_HOST=prod-rabbitmq.example.com
+RABBITMQ_PORT=5672
+RABBITMQ_USERNAME=order_service
+RABBITMQ_PASSWORD=<secure_password>
+
+# Application
+JWT_SECRET=<256_bit_secret_key>
+JWT_EXPIRE_MINUTES=60
+SPRING_PROFILES_ACTIVE=prod
+```
+
+<Warning>
+Never commit `.env` files with production credentials to version control.
+</Warning>
+
+## Deployment Methods
+
+### Systemd Service (Linux)
+
+Create a systemd service file:
+
+```ini /etc/systemd/system/ecommerce-order.service
+[Unit]
+Description=Ecommerce Order Service
+After=syslog.target network.target
+
+[Service]
+User=ecommerce
+ExecStart=/opt/ecommerce/ecommerce-order-service-api.jar
+SuccessExitStatus=143
+EnvironmentFile=/opt/ecommerce/order.env
+StandardOutput=journal
+StandardError=journal
+
+[Install]
+WantedBy=multi-user.target
+```
+
+**Deploy and start:**
+
+<Steps>
+  <Step title="Copy JAR to server">
+    ```bash
+    scp build/libs/*.jar user@server:/opt/ecommerce/
+    ```
+  </Step>
+  
+  <Step title="Make executable">
+    ```bash
+    chmod +x /opt/ecommerce/ecommerce-order-service-api.jar
+    ```
+  </Step>
+  
+  <Step title="Copy environment file">
+    ```bash
+    scp order.env user@server:/opt/ecommerce/
+    ```
+  </Step>
+  
+  <Step title="Enable and start service">
+    ```bash
+    sudo systemctl enable ecommerce-order
+    sudo systemctl start ecommerce-order
+    ```
+  </Step>
+  
+  <Step title="Verify status">
+    ```bash
+    sudo systemctl status ecommerce-order
+    sudo journalctl -u ecommerce-order -f
+    ```
+  </Step>
+</Steps>
+
+### Docker Deployment
+
+Create a `Dockerfile`:
+
+```dockerfile Dockerfile
+FROM openjdk:8-jdk-alpine
+
+VOLUME /tmp
+EXPOSE 8080
+
+ARG JAR_FILE=ecommerce-order-service-api/build/libs/*.jar
+COPY ${JAR_FILE} app.jar
+
+ENTRYPOINT ["java","-Djava.security.egd=file:/dev/./urandom","-jar","/app.jar"]
+```
+
+**Build and run:**
+
+<CodeGroup>
+```bash Build image
+docker build -t ecommerce-order-service:latest .
+```
+
+```bash Run container
+docker run -d \
+  --name ecommerce-order \
+  -p 8080:8080 \
+  --env-file prod.env \
+  ecommerce-order-service:latest
+```
+
+```bash Docker Compose
+version: '3'
+services:
+  order-service:
+    image: ecommerce-order-service:latest
+    ports:
+      - "8080:8080"
+    env_file:
+      - prod.env
+    depends_on:
+      - mysql
+      - rabbitmq
+```
+</CodeGroup>
+
+### Kubernetes Deployment
+
+Create Kubernetes manifests:
+
+```yaml deployment.yaml
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: ecommerce-order
+spec:
+  replicas: 3
+  selector:
+    matchLabels:
+      app: ecommerce-order
+  template:
+    metadata:
+      labels:
+        app: ecommerce-order
+    spec:
+      containers:
+      - name: order-service
+        image: your-registry/ecommerce-order-service:latest
+        ports:
+        - containerPort: 8080
+        env:
+        - name: SPRING_PROFILES_ACTIVE
+          value: "prod"
+        - name: DB_HOST
+          valueFrom:
+            secretKeyRef:
+              name: order-secrets
+              key: db-host
+        - name: DB_USERNAME
+          valueFrom:
+            secretKeyRef:
+              name: order-secrets
+              key: db-username
+        - name: DB_PASSWORD
+          valueFrom:
+            secretKeyRef:
+              name: order-secrets
+              key: db-password
+        livenessProbe:
+          httpGet:
+            path: /about
+            port: 8080
+          initialDelaySeconds: 30
+          periodSeconds: 10
+        readinessProbe:
+          httpGet:
+            path: /about
+            port: 8080
+          initialDelaySeconds: 20
+          periodSeconds: 5
+        resources:
+          requests:
+            memory: "512Mi"
+            cpu: "500m"
+          limits:
+            memory: "1Gi"
+            cpu: "1000m"
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: ecommerce-order
+spec:
+  selector:
+    app: ecommerce-order
+  ports:
+  - port: 80
+    targetPort: 8080
+  type: LoadBalancer
+```
+
+**Deploy to Kubernetes:**
+
+```bash
+kubectl apply -f deployment.yaml
+kubectl get pods -l app=ecommerce-order
+kubectl logs -f deployment/ecommerce-order
+```
+
+## Database Migration
+
+### Schema Setup
+
+For production, use a migration tool like Flyway or Liquibase.
+
+**Flyway example:**
+
+```sql src/main/resources/db/migration/V1__create_orders_table.sql
+CREATE TABLE orders (
+    id VARCHAR(255) PRIMARY KEY,
+    total_price DECIMAL(19,2) NOT NULL,
+    status VARCHAR(50) NOT NULL,
+    province VARCHAR(255),
+    city VARCHAR(255),
+    address_detail TEXT,
+    created_at TIMESTAMP NOT NULL
+);
+
+CREATE TABLE order_items (
+    id BIGINT AUTO_INCREMENT PRIMARY KEY,
+    order_id VARCHAR(255) NOT NULL,
+    product_id VARCHAR(255) NOT NULL,
+    count INT NOT NULL,
+    item_price DECIMAL(19,2) NOT NULL,
+    FOREIGN KEY (order_id) REFERENCES orders(id)
+);
+
+CREATE INDEX idx_orders_created_at ON orders(created_at);
+CREATE INDEX idx_order_items_order_id ON order_items(order_id);
+```
+
+### Run Migrations
+
+```bash
+./gradlew flywayMigrate -Dflyway.url=jdbc:mysql://prod-host:3306/ecommerce_order_mysql
+```
+
+## Monitoring and Observability
+
+### Health Checks
+
+The service exposes a health endpoint:
+
+```bash
+curl http://localhost:8080/about
+```
+
+Response:
+
+```json
+{
+  "appName": "ecommerce-order-service",
+  "buildNumber": "123",
+  "buildTime": "2024-03-04T10:30:00Z",
+  "gitRevision": "abc1234",
+  "gitBranch": "main",
+  "environment": "prod"
+}
+```
+
+### Distributed Tracing
+
+The service integrates with Zipkin:
+
+```yaml
+spring:
+  zipkin:
+    base-url: http://zipkin-server:9411
+  sleuth:
+    sampler:
+      probability: 0.1  # Sample 10% of requests
+```
+
+View traces at `http://zipkin-server:9411`
+
+### Metrics
+
+Add Spring Boot Actuator for metrics:
+
+```yaml application-prod.yml
+management:
+  endpoints:
+    web:
+      exposure:
+        include: health,info,metrics,prometheus
+  metrics:
+    export:
+      prometheus:
+        enabled: true
+```
+
+Scrape metrics at `/actuator/prometheus`
+
+## Rollout Strategy
+
+### Blue-Green Deployment
+
+<Steps>
+  <Step title="Deploy new version (green)">
+    Deploy the new version to a separate set of servers or pods without routing traffic to them.
+  </Step>
+  
+  <Step title="Smoke test green">
+    Run health checks and smoke tests against the green environment.
+  </Step>
+  
+  <Step title="Switch traffic">
+    Update load balancer to route traffic to green environment.
+  </Step>
+  
+  <Step title="Monitor">
+    Watch error rates, latency, and logs.
+  </Step>
+  
+  <Step title="Rollback if needed">
+    If issues arise, switch traffic back to blue environment.
+  </Step>
+</Steps>
+
+### Rolling Update (Kubernetes)
+
+```yaml
+spec:
+  strategy:
+    type: RollingUpdate
+    rollingUpdate:
+      maxUnavailable: 1
+      maxSurge: 1
+```
+
+Update:
+
+```bash
+kubectl set image deployment/ecommerce-order \
+  order-service=your-registry/ecommerce-order-service:v2
+  
+kubectl rollout status deployment/ecommerce-order
+```
+
+## Scaling
+
+### Horizontal Scaling
+
+The service is stateless and can be scaled horizontally:
+
+**Kubernetes:**
+
+```bash
+kubectl scale deployment ecommerce-order --replicas=5
+```
+
+**Auto-scaling:**
+
+```yaml
+apiVersion: autoscaling/v2
+kind: HorizontalPodAutoscaler
+metadata:
+  name: ecommerce-order-hpa
+spec:
+  scaleTargetRef:
+    apiVersion: apps/v1
+    kind: Deployment
+    name: ecommerce-order
+  minReplicas: 2
+  maxReplicas: 10
+  metrics:
+  - type: Resource
+    resource:
+      name: cpu
+      target:
+        type: Utilization
+        averageUtilization: 70
+```
+
+### Database Scaling
+
+For MySQL:
+
+- **Read replicas** - Route read queries to replicas
+- **Connection pooling** - Tune HikariCP settings
+- **Sharding** - Partition orders by date or region
+
+## Troubleshooting
+
+<Accordion title="Service won't start">
+  **Check logs:**
+  
+  ```bash
+  # Systemd
+  sudo journalctl -u ecommerce-order -n 100
+  
+  # Docker
+  docker logs ecommerce-order
+  
+  # Kubernetes
+  kubectl logs deployment/ecommerce-order
+  ```
+  
+  **Common issues:**
+  
+  - Database not accessible
+  - RabbitMQ connection failed
+  - Port 8080 already in use
+  - Missing environment variables
+</Accordion>
+
+<Accordion title="High memory usage">
+  Tune JVM options:
+  
+  ```bash
+  JAVA_OPTS="-Xms512m -Xmx1g -XX:+UseG1GC"
+  ```
+</Accordion>
+
+<Accordion title="Database connection pool exhausted">
+  Increase pool size in `application-prod.yml`:
+  
+  ```yaml
+  spring:
+    datasource:
+      hikari:
+        maximum-pool-size: 30
+  ```
+</Accordion>
+
+## Security Checklist
+
+<Tip>
+- [ ] Use environment variables for secrets
+- [ ] Enable HTTPS/TLS in production
+- [ ] Rotate JWT secret regularly
+- [ ] Use strong database passwords
+- [ ] Restrict database network access
+- [ ] Enable RabbitMQ authentication
+- [ ] Run container as non-root user
+- [ ] Keep dependencies updated
+- [ ] Enable audit logging
+- [ ] Set up firewall rules
+</Tip>
+
+## Next Steps
+
+<CardGroup cols={2}>
+  <Card title="Monitoring" icon="chart-line">
+    Set up Prometheus, Grafana, and alerts
+  </Card>
+  <Card title="CI/CD" icon="rotate">
+    Automate builds and deployments
+  </Card>
+  <Card title="Backup Strategy" icon="floppy-disk">
+    Implement database backups
+  </Card>
+  <Card title="Load Testing" icon="gauge-high">
+    Test performance under load
+  </Card>
+</CardGroup>

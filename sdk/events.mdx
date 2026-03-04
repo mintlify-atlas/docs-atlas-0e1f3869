@@ -1,0 +1,274 @@
+---
+title: 'Event Classes'
+description: 'SDK domain event classes published by the order service'
+---
+
+Event classes represent domain events that are published when significant changes occur in the order lifecycle. All order events extend the base `OrderEvent` class.
+
+## OrderEvent (Base Class)
+
+Base class for all order-related domain events.
+
+**Package**: `com.ecommerce.order.sdk.event.order`
+
+**Extends**: `DomainEvent` (from `com.ecommerce.shared.event`)
+
+### Fields
+
+<ParamField path="orderId" type="String">
+  The unique identifier of the order that triggered the event.
+</ParamField>
+
+---
+
+## OrderCreatedEvent
+
+Published when a new order is successfully created.
+
+**Package**: `com.ecommerce.order.sdk.event.order`
+
+**Extends**: `OrderEvent`
+
+### Fields
+
+<ParamField path="orderId" type="String">
+  Unique identifier of the newly created order (inherited from `OrderEvent`).
+</ParamField>
+
+<ParamField path="price" type="BigDecimal">
+  Total price of the order.
+</ParamField>
+
+<ParamField path="address" type="Address">
+  Shipping address for the order.
+</ParamField>
+
+<ParamField path="items" type="List<OrderItem>">
+  List of items in the order. Each item contains `productId` and `count`.
+</ParamField>
+
+<ParamField path="createdAt" type="Instant">
+  Timestamp when the order was created (UTC).
+</ParamField>
+
+### Example
+
+```java
+import com.ecommerce.order.sdk.event.order.OrderCreatedEvent;
+import com.ecommerce.order.sdk.event.order.OrderItem;
+
+// Example event handler
+public void handleOrderCreated(OrderCreatedEvent event) {
+    String orderId = event.getOrderId();
+    BigDecimal totalPrice = event.getPrice();
+    Address shippingAddress = event.getAddress();
+    List<OrderItem> items = event.getItems();
+    Instant createdAt = event.getCreatedAt();
+    
+    // Process the new order
+    System.out.println("Order created: " + orderId);
+    System.out.println("Total: $" + totalPrice);
+    System.out.println("Items: " + items.size());
+}
+```
+
+---
+
+## OrderAddressChangedEvent
+
+Published when an order's shipping address is modified.
+
+**Package**: `com.ecommerce.order.sdk.event.order`
+
+**Extends**: `OrderEvent`
+
+### Fields
+
+<ParamField path="orderId" type="String">
+  Unique identifier of the order (inherited from `OrderEvent`).
+</ParamField>
+
+<ParamField path="oldAddress" type="String">
+  The previous address details.
+</ParamField>
+
+<ParamField path="newAddress" type="String">
+  The updated address details.
+</ParamField>
+
+### Example
+
+```java
+import com.ecommerce.order.sdk.event.order.OrderAddressChangedEvent;
+
+public void handleAddressChanged(OrderAddressChangedEvent event) {
+    String orderId = event.getOrderId();
+    String oldAddress = event.getOldAddress();
+    String newAddress = event.getNewAddress();
+    
+    // Log address change for audit trail
+    logger.info("Order {} address changed from '{}' to '{}'",
+        orderId, oldAddress, newAddress);
+    
+    // Notify shipping department
+    shippingService.updateDeliveryAddress(orderId, newAddress);
+}
+```
+
+---
+
+## OrderProductChangedEvent
+
+Published when the quantity of a product in an order is changed.
+
+**Package**: `com.ecommerce.order.sdk.event.order`
+
+**Extends**: `OrderEvent`
+
+### Fields
+
+<ParamField path="orderId" type="String">
+  Unique identifier of the order (inherited from `OrderEvent`).
+</ParamField>
+
+<ParamField path="productId" type="String">
+  ID of the product whose quantity changed.
+</ParamField>
+
+<ParamField path="originCount" type="int">
+  Original quantity of the product.
+</ParamField>
+
+<ParamField path="newCount" type="int">
+  Updated quantity of the product.
+</ParamField>
+
+### Example
+
+```java
+import com.ecommerce.order.sdk.event.order.OrderProductChangedEvent;
+
+public void handleProductChanged(OrderProductChangedEvent event) {
+    String orderId = event.getOrderId();
+    String productId = event.getProductId();
+    int originCount = event.getOriginCount();
+    int newCount = event.getNewCount();
+    int difference = newCount - originCount;
+    
+    // Update inventory
+    if (difference > 0) {
+        inventoryService.reserve(productId, difference);
+    } else {
+        inventoryService.release(productId, Math.abs(difference));
+    }
+    
+    // Recalculate order total
+    orderService.recalculateTotal(orderId);
+}
+```
+
+---
+
+## OrderPaidEvent
+
+Published when an order is successfully paid.
+
+**Package**: `com.ecommerce.order.sdk.event.order`
+
+**Extends**: `OrderEvent`
+
+### Fields
+
+<ParamField path="orderId" type="String">
+  Unique identifier of the paid order (inherited from `OrderEvent`).
+</ParamField>
+
+### Example
+
+```java
+import com.ecommerce.order.sdk.event.order.OrderPaidEvent;
+
+public void handleOrderPaid(OrderPaidEvent event) {
+    String orderId = event.getOrderId();
+    
+    // Trigger fulfillment process
+    fulfillmentService.startProcessing(orderId);
+    
+    // Send confirmation email
+    emailService.sendOrderConfirmation(orderId);
+    
+    // Update analytics
+    analyticsService.recordPayment(orderId);
+}
+```
+
+---
+
+## OrderItem (Event)
+
+Represents an item within order events.
+
+**Package**: `com.ecommerce.order.sdk.event.order`
+
+### Fields
+
+<ParamField path="productId" type="String">
+  Unique identifier of the product.
+</ParamField>
+
+<ParamField path="count" type="int">
+  Quantity of the product.
+</ParamField>
+
+### Example
+
+```java
+import com.ecommerce.order.sdk.event.order.OrderItem;
+
+// Typically used within OrderCreatedEvent
+for (OrderItem item : orderCreatedEvent.getItems()) {
+    String productId = item.getProductId();
+    int count = item.getCount();
+    System.out.println("Product: " + productId + ", Quantity: " + count);
+}
+```
+
+---
+
+## Event Handling with Spring
+
+You can handle these events using Spring's event listener mechanism:
+
+```java
+import org.springframework.context.event.EventListener;
+import org.springframework.stereotype.Component;
+import com.ecommerce.order.sdk.event.order.*;
+
+@Component
+public class OrderEventListener {
+    
+    @EventListener
+    public void handleOrderCreated(OrderCreatedEvent event) {
+        // Handle order creation
+    }
+    
+    @EventListener
+    public void handleOrderPaid(OrderPaidEvent event) {
+        // Handle order payment
+    }
+    
+    @EventListener
+    public void handleAddressChanged(OrderAddressChangedEvent event) {
+        // Handle address changes
+    }
+    
+    @EventListener
+    public void handleProductChanged(OrderProductChangedEvent event) {
+        // Handle product quantity changes
+    }
+}
+```
+
+## Event Sourcing
+
+These events can be used for event sourcing patterns, where the complete state of an order can be reconstructed by replaying all events in sequence.

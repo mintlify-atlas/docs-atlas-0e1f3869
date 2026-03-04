@@ -1,0 +1,228 @@
+---
+title: Order lifecycle
+description: Order state transitions and business rules
+---
+
+Orders in the system follow a defined lifecycle with two primary states and specific rules governing transitions.
+
+## Order States
+
+The system defines two order states in the `OrderStatus` enum:
+
+```java OrderStatus.java
+public enum OrderStatus {
+    CREATED,
+    PAID
+}
+```
+
+### CREATED
+
+The initial state when an order is created:
+
+- Order has been submitted with items and delivery address
+- Total price has been calculated automatically
+- Order can be modified (change quantities, update address)
+- Payment has not been processed
+
+### PAID
+
+The final state after successful payment:
+
+- Payment has been processed and verified
+- Order is immutable - no further modifications allowed
+- Order is ready for fulfillment
+
+<Note>
+The current implementation has two states. Future versions may add additional states like SHIPPED, DELIVERED, or CANCELLED.
+</Note>
+
+## State Transitions
+
+```
+┌─────────┐              ┌──────────┐
+│ CREATED │──────────────▶│   PAID   │
+└─────────┘   pay()       └──────────┘
+     │                         │
+     │ Allowed:                │ Immutable:
+     │ • Change quantity       │ • No changes
+     │ • Update address        │   allowed
+     └─────────────────────────┘
+```
+
+## Business Rules
+
+### Order Creation
+
+When an order is created via `POST /orders`:
+
+```java Order.java
+public static Order create(String id, List<OrderItem> items, Address address) {
+    Order order = Order.builder()
+            .id(id)
+            .items(items)
+            .totalPrice(calculateTotalPrice(items))  // Auto-calculated
+            .status(CREATED)                          // Initial state
+            .address(address)
+            .createdAt(now())
+            .build();
+    order.raiseCreatedEvent(id, items, address);
+    return order;
+}
+```
+
+**Rules:**
+
+1. Order ID is generated automatically using timestamp-based format
+2. Total price is calculated from item prices and quantities
+3. Order starts in CREATED state
+4. OrderCreatedEvent is published to RabbitMQ
+5. Items list must not be empty (validated by controller)
+6. Address must be complete (province, city, detail required)
+
+### Changing Product Quantities
+
+While in CREATED state, quantities can be modified via `POST /orders/{id}/products`:
+
+```java Order.java
+public void changeProductCount(String productId, int count) {
+    if (this.status == PAID) {
+        throw new OrderCannotBeModifiedException(this.id);
+    }
+    
+    OrderItem orderItem = retrieveItem(productId);
+    int originalCount = orderItem.getCount();
+    orderItem.updateCount(count);
+    this.totalPrice = calculateTotalPrice(items);  // Recalculated
+    raiseEvent(new OrderProductChangedEvent(id, productId, originalCount, count));
+}
+```
+
+**Rules:**
+
+1. Only allowed when status is CREATED
+2. Product must exist in the order
+3. Total price is recalculated automatically
+4. OrderProductChangedEvent is published
+5. Count must be positive (validated by controller)
+
+**Exceptions:**
+
+- `OrderCannotBeModifiedException` (409) - Order is already PAID
+- `ProductNotInOrderException` (409) - Product not found in order
+- `OrderNotFoundException` (404) - Order ID doesn't exist
+
+### Changing Address
+
+Delivery address detail can be updated via `POST /orders/{id}/address/detail`:
+
+```java Order.java
+public void changeAddressDetail(String detail) {
+    if (this.status == PAID) {
+        throw new OrderCannotBeModifiedException(this.id);
+    }
+    
+    this.address = this.address.changeDetailTo(detail);
+    raiseEvent(new OrderAddressChangedEvent(getId(), detail, address.getDetail()));
+}
+```
+
+**Rules:**
+
+1. Only allowed when status is CREATED
+2. Only the address detail field can be changed (not province/city)
+3. OrderAddressChangedEvent is published
+
+**Exceptions:**
+
+- `OrderCannotBeModifiedException` (409) - Order is already PAID
+- `OrderNotFoundException` (404) - Order ID doesn't exist
+
+### Payment
+
+Payment is processed via `POST /orders/{id}/payment`:
+
+```java Order.java
+public void pay(BigDecimal paidPrice) {
+    if (!this.totalPrice.equals(paidPrice)) {
+        throw new PaidPriceNotSameWithOrderPriceException(id);
+    }
+    this.status = PAID;
+    raiseEvent(new OrderPaidEvent(this.getId()));
+}
+```
+
+**Rules:**
+
+1. Paid price must exactly match order total price
+2. Order transitions from CREATED to PAID
+3. OrderPaidEvent is published
+4. Order becomes immutable after this transition
+
+**Exceptions:**
+
+- `PaidPriceNotSameWithOrderPriceException` (409) - Price mismatch
+- `OrderNotFoundException` (404) - Order ID doesn't exist
+
+<Warning>
+The paid price must match the current total price exactly. If you've changed product quantities, ensure you fetch the updated total price before attempting payment.
+</Warning>
+
+## Immutability After Payment
+
+Once an order is PAID, it becomes immutable. All modification attempts will fail:
+
+```bash
+# This will fail with 409 Conflict
+curl -X POST http://localhost:8080/orders/ORDER_123/products \
+  -H "Content-Type: application/json" \
+  -d '{"productId": "P123", "count": 5}'
+
+# Response:
+{
+  "errorCode": "ORDER_CANNOT_BE_MODIFIED",
+  "errorMessage": "订单[ORDER_123]无法被修改"
+}
+```
+
+## Event Timeline
+
+For a typical order lifecycle, the following events are published:
+
+<Steps>
+  <Step title="Order Creation">
+    **OrderCreatedEvent** published with order details, items, and address
+  </Step>
+  
+  <Step title="Modifications (optional)">
+    **OrderProductChangedEvent** and/or **OrderAddressChangedEvent** published for any changes
+  </Step>
+  
+  <Step title="Payment">
+    **OrderPaidEvent** published when payment succeeds
+  </Step>
+</Steps>
+
+These events are consumed by:
+
+- **ecommerce-order-query-service** - Updates read-optimized views
+- **ecommerce-inventory-service** - Reserves inventory when order is paid
+- Other microservices in the platform
+
+## Price Calculation
+
+Total price is always calculated automatically:
+
+```java Order.java
+private static BigDecimal calculateTotalPrice(List<OrderItem> items) {
+    return items.stream()
+            .map(OrderItem::totalPrice)  // itemPrice * count
+            .reduce(ZERO, BigDecimal::add);
+}
+```
+
+You never set the total price directly - it's derived from item prices and quantities.
+
+<Tip>
+To modify an order's total price, change the item quantities or add/remove items (though item addition/removal is not currently supported via API).
+</Tip>

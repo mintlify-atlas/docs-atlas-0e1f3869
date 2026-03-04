@@ -1,0 +1,325 @@
+---
+title: 'Model Classes'
+description: 'SDK representation classes for API responses'
+---
+
+Representation classes model the response data returned by the order service API endpoints. These immutable classes use Lombok's `@Value` annotation.
+
+## AboutRepresentation
+
+Represents service build and deployment information returned by the `/about` endpoint.
+
+**Package**: `com.ecommerce.order.sdk.representation.about`
+
+### Fields
+
+<ParamField path="appName" type="String">
+  Name of the application.
+</ParamField>
+
+<ParamField path="buildNumber" type="String">
+  Build number from CI/CD pipeline.
+</ParamField>
+
+<ParamField path="buildTime" type="String">
+  Timestamp when the application was built.
+</ParamField>
+
+<ParamField path="deployTime" type="String">
+  Timestamp when the service was deployed.
+</ParamField>
+
+<ParamField path="gitRevision" type="String">
+  Git commit hash of the deployed version.
+</ParamField>
+
+<ParamField path="gitBranch" type="String">
+  Git branch from which the service was built.
+</ParamField>
+
+<ParamField path="environment" type="String">
+  Active Spring profiles (environment configuration).
+</ParamField>
+
+### Example
+
+```java
+import com.ecommerce.order.sdk.representation.about.AboutRepresentation;
+
+// Typically received from GET /about
+AboutRepresentation about = restTemplate.getForObject(
+    "http://localhost:8080/about",
+    AboutRepresentation.class
+);
+
+System.out.println("App: " + about.getAppName());
+System.out.println("Version: " + about.getBuildNumber());
+System.out.println("Environment: " + about.getEnvironment());
+```
+
+---
+
+## OrderRepresentation
+
+Complete representation of an order with all details.
+
+**Package**: `com.ecommerce.order.sdk.representation.order`
+
+### Fields
+
+<ParamField path="id" type="String">
+  Unique identifier of the order.
+</ParamField>
+
+<ParamField path="items" type="List<OrderItem>">
+  List of items in the order. Each item contains product ID, quantity, and unit price.
+</ParamField>
+
+<ParamField path="totalPrice" type="BigDecimal">
+  Total price of the order (sum of all items).
+</ParamField>
+
+<ParamField path="status" type="String">
+  Current status of the order (e.g., "CREATED", "PAID", "SHIPPED").
+</ParamField>
+
+<ParamField path="address" type="Address">
+  Shipping address for the order.
+</ParamField>
+
+<ParamField path="createdAt" type="Instant">
+  Timestamp when the order was created (UTC).
+</ParamField>
+
+### Example
+
+```java
+import com.ecommerce.order.sdk.representation.order.OrderRepresentation;
+import com.ecommerce.order.sdk.representation.order.OrderItem;
+
+// Fetch order details
+OrderRepresentation order = restTemplate.getForObject(
+    "http://localhost:8080/orders/{orderId}",
+    OrderRepresentation.class,
+    orderId
+);
+
+System.out.println("Order ID: " + order.getId());
+System.out.println("Status: " + order.getStatus());
+System.out.println("Total: $" + order.getTotalPrice());
+System.out.println("Items:");
+
+for (OrderItem item : order.getItems()) {
+    System.out.println("  - Product: " + item.getProductId());
+    System.out.println("    Quantity: " + item.getCount());
+    System.out.println("    Price: $" + item.getItemPrice());
+}
+
+System.out.println("Shipping to: " + order.getAddress());
+System.out.println("Created: " + order.getCreatedAt());
+```
+
+---
+
+## OrderSummaryRepresentation
+
+Summary view of an order with essential information (used for list views).
+
+**Package**: `com.ecommerce.order.sdk.representation.order`
+
+### Fields
+
+<ParamField path="id" type="String">
+  Unique identifier of the order.
+</ParamField>
+
+<ParamField path="totalPrice" type="BigDecimal">
+  Total price of the order.
+</ParamField>
+
+<ParamField path="status" type="String">
+  Current status of the order.
+</ParamField>
+
+<ParamField path="createdAt" type="Instant">
+  Timestamp when the order was created (UTC).
+</ParamField>
+
+<ParamField path="address" type="Address">
+  Shipping address for the order.
+</ParamField>
+
+### Example
+
+```java
+import com.ecommerce.order.sdk.representation.order.OrderSummaryRepresentation;
+import org.springframework.core.ParameterizedTypeReference;
+import org.springframework.http.HttpMethod;
+
+// Fetch list of orders
+ResponseEntity<List<OrderSummaryRepresentation>> response = restTemplate.exchange(
+    "http://localhost:8080/orders",
+    HttpMethod.GET,
+    null,
+    new ParameterizedTypeReference<List<OrderSummaryRepresentation>>() {}
+);
+
+List<OrderSummaryRepresentation> orders = response.getBody();
+
+for (OrderSummaryRepresentation summary : orders) {
+    System.out.println("Order " + summary.getId() + 
+                       " - $" + summary.getTotalPrice() + 
+                       " (" + summary.getStatus() + ")");
+}
+```
+
+---
+
+## OrderItem (Representation)
+
+Represents a single item within an order response.
+
+**Package**: `com.ecommerce.order.sdk.representation.order`
+
+### Fields
+
+<ParamField path="productId" type="String">
+  Unique identifier of the product.
+</ParamField>
+
+<ParamField path="count" type="int">
+  Quantity of the product in the order.
+</ParamField>
+
+<ParamField path="itemPrice" type="BigDecimal">
+  Unit price of the product at the time of order creation.
+</ParamField>
+
+### Example
+
+```java
+import com.ecommerce.order.sdk.representation.order.OrderItem;
+import java.math.BigDecimal;
+
+// Typically accessed through OrderRepresentation
+OrderItem item = order.getItems().get(0);
+
+String productId = item.getProductId();
+int quantity = item.getCount();
+BigDecimal unitPrice = item.getItemPrice();
+BigDecimal lineTotal = unitPrice.multiply(new BigDecimal(quantity));
+
+System.out.println("Product: " + productId);
+System.out.println("Qty: " + quantity + " @ $" + unitPrice);
+System.out.println("Line Total: $" + lineTotal);
+```
+
+---
+
+## Address Model
+
+The `Address` class is from the shared model library (`com.ecommerce.shared.model`). It's used in both representations and commands.
+
+### Common Usage
+
+```java
+import com.ecommerce.shared.model.Address;
+
+Address address = order.getAddress();
+
+// Access address fields
+String recipient = address.getName();
+String street = address.getStreet();
+String city = address.getCity();
+String state = address.getState();
+String zipCode = address.getZipCode();
+
+System.out.println(recipient);
+System.out.println(street + ", " + city + ", " + state + " " + zipCode);
+```
+
+---
+
+## Working with RestTemplate
+
+Here's a complete example using Spring's `RestTemplate` with the SDK models:
+
+```java
+import com.ecommerce.order.sdk.command.order.CreateOrderCommand;
+import com.ecommerce.order.sdk.command.order.OrderItemCommand;
+import com.ecommerce.order.sdk.command.order.PayOrderCommand;
+import com.ecommerce.order.sdk.representation.order.OrderRepresentation;
+import com.ecommerce.shared.model.Address;
+import org.springframework.web.client.RestTemplate;
+import java.math.BigDecimal;
+import java.util.Arrays;
+
+public class OrderClient {
+    private final RestTemplate restTemplate;
+    private final String baseUrl;
+    
+    public OrderClient(RestTemplate restTemplate, String baseUrl) {
+        this.restTemplate = restTemplate;
+        this.baseUrl = baseUrl;
+    }
+    
+    public OrderRepresentation createOrder() {
+        // Build command
+        OrderItemCommand item = new OrderItemCommand(
+            "product-123",
+            2,
+            new BigDecimal("29.99")
+        );
+        
+        Address address = new Address(
+            "John Doe",
+            "123 Main St",
+            "San Francisco",
+            "CA",
+            "94102"
+        );
+        
+        CreateOrderCommand command = new CreateOrderCommand(
+            Arrays.asList(item),
+            address
+        );
+        
+        // Send request
+        return restTemplate.postForObject(
+            baseUrl + "/orders",
+            command,
+            OrderRepresentation.class
+        );
+    }
+    
+    public OrderRepresentation getOrder(String orderId) {
+        return restTemplate.getForObject(
+            baseUrl + "/orders/{orderId}",
+            OrderRepresentation.class,
+            orderId
+        );
+    }
+    
+    public void payOrder(String orderId, BigDecimal amount) {
+        PayOrderCommand command = new PayOrderCommand(amount);
+        
+        restTemplate.postForObject(
+            baseUrl + "/orders/{orderId}/payment",
+            command,
+            Void.class,
+            orderId
+        );
+    }
+}
+```
+
+## Immutability
+
+All representation classes use Lombok's `@Value` annotation, making them immutable. This means:
+
+- All fields are `private` and `final`
+- Only getters are generated (no setters)
+- A constructor is generated with all fields as parameters
+- `equals()`, `hashCode()`, and `toString()` are automatically implemented
+
+This ensures thread-safety and prevents accidental modification of response data.

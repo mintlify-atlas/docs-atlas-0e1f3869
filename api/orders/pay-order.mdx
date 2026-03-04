@@ -1,0 +1,95 @@
+---
+title: "Pay Order"
+api: "POST /orders/{id}/payment"
+---
+
+Processes payment for an order. The paid amount must match the order's total price.
+
+## Authentication
+
+This endpoint requires authentication.
+
+## Path Parameters
+
+<ParamField path="id" type="string" required>
+  The unique identifier of the order to pay.
+</ParamField>
+
+## Request Body
+
+<ParamField body="paidPrice" type="decimal" required>
+  The amount being paid. Must match the order's total price exactly. Cannot be null.
+</ParamField>
+
+## Response
+
+Returns no content on success.
+
+## Status Codes
+
+- `200 OK` - Payment processed successfully
+- `400 Bad Request` - Invalid request body or validation errors
+- `401 Unauthorized` - Authentication required
+- `404 Not Found` - Order not found
+- `409 Conflict` - Payment amount doesn't match order price or order cannot be modified
+
+## Error Responses
+
+### Order Not Found (404)
+
+```json
+{
+  "code": "ORDER_NOT_FOUND",
+  "message": "没有找到订单",
+  "orderId": "order_123"
+}
+```
+
+### Paid Price Not Same With Order Price (409)
+
+```json
+{
+  "code": "PAID_PRICE_NOT_SAME_WITH_ORDER_PRICE",
+  "message": "支付价格与订单实际价格不符",
+  "orderId": "order_123"
+}
+```
+
+This error occurs when the `paidPrice` provided in the request does not match the order's `totalPrice`.
+
+### Order Cannot Be Modified (409)
+
+```json
+{
+  "code": "ORDER_CANNOT_BE_MODIFIED",
+  "message": "订单无法变更",
+  "orderId": "order_123"
+}
+```
+
+This error occurs when attempting to pay an order that has already been paid or is in a non-payable state.
+
+### Validation Errors (400)
+
+- "支付金额不能为空" - Paid price cannot be null
+
+## Example Request
+
+```bash
+curl -X POST https://api.example.com/orders/order_abc123def456/payment \
+  -H "Content-Type: application/json" \
+  -H "Authorization: Bearer YOUR_TOKEN" \
+  -d '{
+    "paidPrice": 109.97
+  }'
+```
+
+## Example Response
+
+No content is returned on success (status 200).
+
+## Notes
+
+- Ensure the `paidPrice` matches the order's `totalPrice` exactly to avoid payment rejection.
+- Once an order is paid, it typically cannot be modified further (products, address, etc.).
+- The payment amount should be retrieved from the order details (GET /orders/{id}) to ensure accuracy.

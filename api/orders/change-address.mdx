@@ -1,0 +1,77 @@
+---
+title: "Change Address Detail"
+api: "POST /orders/{id}/address/detail"
+---
+
+Updates the detailed address information for an order.
+
+## Authentication
+
+This endpoint requires authentication.
+
+## Path Parameters
+
+<ParamField path="id" type="string" required>
+  The unique identifier of the order to modify.
+</ParamField>
+
+## Request Body
+
+<ParamField body="detail" type="string" required>
+  The new detailed address information (e.g., street address, building number, apartment). Cannot be null.
+</ParamField>
+
+## Response
+
+Returns no content on success.
+
+## Status Codes
+
+- `200 OK` - Address detail updated successfully
+- `400 Bad Request` - Invalid request body or validation errors
+- `401 Unauthorized` - Authentication required
+- `404 Not Found` - Order not found
+- `409 Conflict` - Order cannot be modified
+
+## Error Responses
+
+### Order Not Found (404)
+
+```json
+{
+  "code": "ORDER_NOT_FOUND",
+  "message": "没有找到订单",
+  "orderId": "order_123"
+}
+```
+
+### Order Cannot Be Modified (409)
+
+```json
+{
+  "code": "ORDER_CANNOT_BE_MODIFIED",
+  "message": "订单无法变更",
+  "orderId": "order_123"
+}
+```
+
+This error occurs when attempting to modify an order that has already been paid or shipped.
+
+### Validation Errors (400)
+
+- "详细地址不能为空" - Detail address cannot be null
+
+## Example Request
+
+```bash
+curl -X POST https://api.example.com/orders/order_abc123def456/address/detail \
+  -H "Content-Type: application/json" \
+  -H "Authorization: Bearer YOUR_TOKEN" \
+  -d '{
+    "detail": "789 Pine Street, Building A, Suite 1200"
+  }'
+```
+
+## Example Response
+
+No content is returned on success (status 200).

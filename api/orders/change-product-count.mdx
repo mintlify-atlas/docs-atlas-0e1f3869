@@ -1,0 +1,94 @@
+---
+title: "Change Product Count"
+api: "POST /orders/{id}/products"
+---
+
+Updates the quantity of a specific product within an order.
+
+## Authentication
+
+This endpoint requires authentication.
+
+## Path Parameters
+
+<ParamField path="id" type="string" required>
+  The unique identifier of the order to modify.
+</ParamField>
+
+## Request Body
+
+<ParamField body="productId" type="string" required>
+  The ID of the product to update. Cannot be blank.
+</ParamField>
+
+<ParamField body="count" type="integer" required>
+  The new quantity for the product. Must be at least 1.
+</ParamField>
+
+## Response
+
+Returns no content on success.
+
+## Status Codes
+
+- `200 OK` - Product count updated successfully
+- `400 Bad Request` - Invalid request body or validation errors
+- `401 Unauthorized` - Authentication required
+- `404 Not Found` - Order not found
+- `409 Conflict` - Order cannot be modified or product not in order
+
+## Error Responses
+
+### Order Not Found (404)
+
+```json
+{
+  "code": "ORDER_NOT_FOUND",
+  "message": "没有找到订单",
+  "orderId": "order_123"
+}
+```
+
+### Order Cannot Be Modified (409)
+
+```json
+{
+  "code": "ORDER_CANNOT_BE_MODIFIED",
+  "message": "订单无法变更",
+  "orderId": "order_123"
+}
+```
+
+This error occurs when attempting to modify an order that has already been paid or shipped.
+
+### Product Not In Order (409)
+
+```json
+{
+  "code": "PRODUCT_NOT_IN_ORDER",
+  "message": "订单不包含产品",
+  "productId": "prod_123",
+  "orderId": "order_123"
+}
+```
+
+### Validation Errors (400)
+
+- "产品ID不能为空" - Product ID cannot be blank
+- "产品数量必须大于0" - Product count must be greater than 0
+
+## Example Request
+
+```bash
+curl -X POST https://api.example.com/orders/order_abc123def456/products \
+  -H "Content-Type: application/json" \
+  -H "Authorization: Bearer YOUR_TOKEN" \
+  -d '{
+    "productId": "prod_123456",
+    "count": 5
+  }'
+```
+
+## Example Response
+
+No content is returned on success (status 200).

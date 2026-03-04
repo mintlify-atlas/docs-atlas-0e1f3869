@@ -1,0 +1,119 @@
+---
+title: "Get Order"
+api: "GET /orders/{id}"
+---
+
+Retrieves detailed information about a specific order.
+
+## Authentication
+
+This endpoint requires authentication.
+
+## Path Parameters
+
+<ParamField path="id" type="string" required>
+  The unique identifier of the order to retrieve.
+</ParamField>
+
+## Response
+
+<ResponseField name="id" type="string">
+  The unique identifier of the order.
+</ResponseField>
+
+<ResponseField name="items" type="array">
+  List of items in the order.
+  
+  <ResponseField name="productId" type="string">
+    The ID of the product.
+  </ResponseField>
+  
+  <ResponseField name="count" type="integer">
+    The quantity ordered.
+  </ResponseField>
+  
+  <ResponseField name="itemPrice" type="decimal">
+    The unit price of the product.
+  </ResponseField>
+</ResponseField>
+
+<ResponseField name="totalPrice" type="decimal">
+  The total price of the order.
+</ResponseField>
+
+<ResponseField name="status" type="string">
+  The current status of the order (e.g., CREATED, PAID, SHIPPED).
+</ResponseField>
+
+<ResponseField name="address" type="object">
+  The delivery address for the order.
+  
+  <ResponseField name="province" type="string">
+    Province or state.
+  </ResponseField>
+  
+  <ResponseField name="city" type="string">
+    City name.
+  </ResponseField>
+  
+  <ResponseField name="detail" type="string">
+    Detailed address information.
+  </ResponseField>
+</ResponseField>
+
+<ResponseField name="createdAt" type="timestamp">
+  The timestamp when the order was created (ISO 8601 format).
+</ResponseField>
+
+## Status Codes
+
+- `200 OK` - Order retrieved successfully
+- `401 Unauthorized` - Authentication required
+- `404 Not Found` - Order not found
+
+## Error Responses
+
+### Order Not Found (404)
+
+```json
+{
+  "code": "ORDER_NOT_FOUND",
+  "message": "没有找到订单",
+  "orderId": "order_123"
+}
+```
+
+## Example Request
+
+```bash
+curl -X GET https://api.example.com/orders/order_abc123def456 \
+  -H "Authorization: Bearer YOUR_TOKEN"
+```
+
+## Example Response
+
+```json
+{
+  "id": "order_abc123def456",
+  "items": [
+    {
+      "productId": "prod_123456",
+      "count": 2,
+      "itemPrice": 29.99
+    },
+    {
+      "productId": "prod_789012",
+      "count": 1,
+      "itemPrice": 49.99
+    }
+  ],
+  "totalPrice": 109.97,
+  "status": "CREATED",
+  "address": {
+    "province": "California",
+    "city": "San Francisco",
+    "detail": "123 Market St, Suite 400"
+  },
+  "createdAt": "2026-03-04T10:30:00Z"
+}
+```

@@ -1,0 +1,321 @@
+---
+title: Events
+description: Event-driven architecture with RabbitMQ
+---
+
+The Ecommerce Order Service uses event-driven architecture to enable loose coupling between microservices and support CQRS patterns.
+
+## Event Publishing Architecture
+
+Events are raised within the domain model and published to RabbitMQ:
+
+```
+┌──────────────────┐
+│   Order Domain   │
+│   (raises event) │
+└────────┬─────────┘
+         │
+         ▼
+┌──────────────────┐
+│  BaseAggregate   │
+│ (collects events)│
+└────────┬─────────┘
+         │
+         ▼
+┌──────────────────┐
+│ Event Publisher  │
+│   (RabbitMQ)     │
+└────────┬─────────┘
+         │
+         ▼
+  ┌──────────────┐
+  │   Exchange   │
+  │ order-publish│
+  └──────┬───────┘
+         │
+    ┌────┴────┬────────────┐
+    ▼         ▼            ▼
+ [Query]  [Inventory]  [Other]
+ Service   Service     Services
+```
+
+## RabbitMQ Configuration
+
+The service is configured to publish events to the `order-publish-x` exchange:
+
+```java OrderRabbitmqConfig.java
+@Configuration
+public class OrderRabbitmqConfig {
+    
+    @Bean
+    public Binding bindToInventoryChanged() {
+        return new Binding(
+            properties.getReceiveQ(), 
+            QUEUE, 
+            "order-publish-x", 
+            "com.ecommerce.order.sdk.event.order.#", 
+            null
+        );
+    }
+}
+```
+
+**Configuration Details:**
+
+- **Exchange**: `order-publish-x` (topic exchange)
+- **Routing Key Pattern**: `com.ecommerce.order.sdk.event.order.#`
+- **Event Package**: All events are in `com.ecommerce.order.sdk.event.order` package
+
+## Domain Events
+
+All order events extend the base `OrderEvent` class:
+
+```java OrderEvent.java
+public abstract class OrderEvent extends DomainEvent {
+    private String orderId;
+}
+```
+
+### OrderCreatedEvent
+
+Published when a new order is created:
+
+```java
+public class OrderCreatedEvent extends OrderEvent {
+    private String orderId;
+    private BigDecimal totalPrice;
+    private Address address;
+    private List<OrderItem> items;
+    private Instant createdAt;
+}
+```
+
+**When Published:**
+
+- During order creation via `POST /orders`
+- Before the order is persisted to the database
+
+**Contains:**
+
+- Complete order details including all items
+- Calculated total price
+- Delivery address
+- Creation timestamp
+
+**Use Cases:**
+
+- Trigger inventory reservation checks
+- Update order query database (CQRS)
+- Send order confirmation emails
+- Log order metrics and analytics
+
+### OrderProductChangedEvent
+
+Published when product quantities are modified:
+
+```java
+public class OrderProductChangedEvent extends OrderEvent {
+    private String orderId;
+    private String productId;
+    private int oldCount;
+    private int newCount;
+}
+```
+
+**When Published:**
+
+- During product count changes via `POST /orders/{id}/products`
+- After validation but before persistence
+
+**Contains:**
+
+- Order ID and product ID
+- Previous and new quantity values
+
+**Use Cases:**
+
+- Update inventory reservations
+- Recalculate order summaries in query database
+- Track order modifications for analytics
+
+### OrderAddressChangedEvent
+
+Published when delivery address is updated:
+
+```java
+public class OrderAddressChangedEvent extends OrderEvent {
+    private String orderId;
+    private String detail;
+    private String oldDetail;
+}
+```
+
+**When Published:**
+
+- During address updates via `POST /orders/{id}/address/detail`
+- After validation passes
+
+**Contains:**
+
+- Order ID
+- Previous and new address detail strings
+
+**Use Cases:**
+
+- Update shipping information in logistics systems
+- Refresh order summaries
+- Audit address changes
+
+### OrderPaidEvent
+
+Published when payment is successfully processed:
+
+```java
+public class OrderPaidEvent extends OrderEvent {
+    private String orderId;
+}
+```
+
+**When Published:**
+
+- During payment processing via `POST /orders/{id}/payment`
+- After price validation passes
+- Before order status changes to PAID
+
+**Contains:**
+
+- Order ID only (minimal payload)
+
+**Use Cases:**
+
+- Finalize inventory reservation
+- Trigger fulfillment workflows
+- Update payment status in query database
+- Send payment confirmation
+
+<Note>
+OrderPaidEvent has the smallest payload since consumers can fetch full order details if needed using the order ID.
+</Note>
+
+## Event Consumption
+
+Other services consume these events via RabbitMQ:
+
+### Order Query Service
+
+Consumes all order events to maintain denormalized views:
+
+```java
+@Component
+public class OrderEventConsumer {
+    
+    @RabbitListener(queues = "${ecommerce.rabbitmq.receiveQ}")
+    public void handle(OrderCreatedEvent event) {
+        // Update read-optimized order summary table
+    }
+    
+    @RabbitListener(queues = "${ecommerce.rabbitmq.receiveQ}")
+    public void handle(OrderPaidEvent event) {
+        // Mark order as paid in query database
+    }
+}
+```
+
+### Inventory Service
+
+Consumes payment events to finalize inventory:
+
+```java
+@RabbitListener(queues = "${ecommerce.rabbitmq.receiveQ}")
+public void handle(OrderPaidEvent event) {
+    // Deduct inventory for paid orders
+    inventoryService.finalizeReservation(event.getOrderId());
+}
+```
+
+## Event Ordering
+
+Events are published synchronously within the same transaction:
+
+1. Domain logic executes and raises event
+2. Event is collected by `BaseAggregate`
+3. Transaction commits (order persisted)
+4. Events are published to RabbitMQ
+
+This ensures:
+
+- Events are only published if the transaction succeeds
+- Event order matches operation order
+- No duplicate events for failed transactions
+
+<Warning>
+If RabbitMQ is unavailable, the entire transaction will fail. Ensure RabbitMQ is running before starting the service.
+</Warning>
+
+## Event Schema Evolution
+
+Event classes are in the SDK module and versioned:
+
+- Events should be backward compatible
+- Add new fields with default values
+- Never remove or rename existing fields
+- Consider event versioning for breaking changes
+
+## CQRS Pattern
+
+Events enable Command Query Responsibility Segregation:
+
+**Command Side (this service):**
+
+- Accepts commands that modify order state
+- Publishes events for all state changes
+- Optimized for write operations
+
+**Query Side (order-query-service):**
+
+- Consumes events to build read models
+- Provides optimized queries without joins
+- Eventually consistent with command side
+
+```
+COMMAND                EVENT                 QUERY
+┌────────┐           ┌──────┐              ┌─────────┐
+│ POST   │──────────▶│Event │─────────────▶│ Update  │
+│/orders │  Creates  │ Bus  │  Consumes    │ Summary │
+└────────┘           └──────┘              └─────────┘
+                                                 │
+┌────────┐                                      │
+│  GET   │◀─────────────────────────────────────┘
+│/orders │           Reads from summary
+└────────┘
+```
+
+<Tip>
+For real-time consistency, query the command service directly via `GET /orders/{id}`. For optimized list queries with filtering, use the query service.
+</Tip>
+
+## Local Development
+
+To run the service with RabbitMQ locally:
+
+<Steps>
+  <Step title="Start RabbitMQ">
+    From the devops repository:
+    
+    ```bash
+    cd devops/local/rabbitmq
+    ./start-rabbitmq.sh
+    ```
+  </Step>
+  
+  <Step title="Access RabbitMQ Management UI">
+    Open http://localhost:15672
+    
+    - Username: `guest`
+    - Password: `guest`
+  </Step>
+  
+  <Step title="Monitor Events">
+    Navigate to **Exchanges** → **order-publish-x** to see published events
+  </Step>
+</Steps>

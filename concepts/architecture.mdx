@@ -1,0 +1,200 @@
+---
+title: Architecture
+description: System architecture and domain-driven design patterns
+---
+
+The Ecommerce Order Service is built using domain-driven design (DDD) principles with event-driven architecture and CQRS patterns.
+
+## System Architecture
+
+The service follows a layered architecture with clear separation of concerns:
+
+```
+┌─────────────────────────────────────────┐
+│         REST API Layer                  │
+│      (OrderController)                  │
+└──────────────┬──────────────────────────┘
+               │
+┌──────────────▼──────────────────────────┐
+│      Application Service Layer          │
+│   (OrderApplicationService)             │
+└──────────────┬──────────────────────────┘
+               │
+┌──────────────▼──────────────────────────┐
+│        Domain Model Layer               │
+│  (Order Aggregate, OrderItem)           │
+└──────────────┬──────────────────────────┘
+               │
+┌──────────────▼──────────────────────────┐
+│      Infrastructure Layer               │
+│  (OrderRepository, RabbitMQ)            │
+└─────────────────────────────────────────┘
+```
+
+## Domain-Driven Design
+
+### Aggregates
+
+The **Order** aggregate is the core domain entity that encapsulates all business logic related to orders:
+
+```java Order.java
+public class Order extends BaseAggregate {
+    private String id;
+    private List<OrderItem> items;
+    private BigDecimal totalPrice;
+    private OrderStatus status;
+    private Address address;
+    private Instant createdAt;
+
+    public static Order create(String id, List<OrderItem> items, Address address) {
+        Order order = Order.builder()
+                .id(id)
+                .items(items)
+                .totalPrice(calculateTotalPrice(items))
+                .status(CREATED)
+                .address(address)
+                .createdAt(now())
+                .build();
+        order.raiseCreatedEvent(id, items, address);
+        return order;
+    }
+
+    public void pay(BigDecimal paidPrice) {
+        if (!this.totalPrice.equals(paidPrice)) {
+            throw new PaidPriceNotSameWithOrderPriceException(id);
+        }
+        this.status = PAID;
+        raiseEvent(new OrderPaidEvent(this.getId()));
+    }
+}
+```
+
+<Note>
+The Order aggregate maintains consistency by encapsulating all business rules. All modifications to an order must go through its public methods, which enforce invariants.
+</Note>
+
+### Value Objects
+
+- **OrderItem** - Represents a line item with product ID, count, and price
+- **Address** - Represents delivery address with province, city, and detail
+- **OrderStatus** - Enum with CREATED and PAID states
+
+### Factories
+
+The **OrderFactory** creates new Order instances and generates unique order IDs:
+
+```java
+public static Order create(String id, List<OrderItem> items, Address address)
+```
+
+### Repositories
+
+**OrderRepository** provides persistence abstraction using Spring Data:
+
+- `save(Order order)` - Persists order to MySQL
+- `findById(String id)` - Retrieves order by ID
+- `findAll(Pageable pageable)` - Paginated order listing
+
+## Event-Driven Architecture
+
+The service publishes domain events to RabbitMQ whenever important state changes occur:
+
+<CardGroup cols={2}>
+  <Card title="Order Created" icon="plus">
+    Published when a new order is created
+  </Card>
+  <Card title="Order Paid" icon="credit-card">
+    Published when payment is processed
+  </Card>
+  <Card title="Product Changed" icon="arrow-right-arrow-left">
+    Published when product quantities change
+  </Card>
+  <Card title="Address Changed" icon="location-dot">
+    Published when delivery address changes
+  </Card>
+</CardGroup>
+
+Events are raised within the domain model and published by the infrastructure layer:
+
+```java
+public void changeProductCount(String productId, int count) {
+    if (this.status == PAID) {
+        throw new OrderCannotBeModifiedException(this.id);
+    }
+    
+    OrderItem orderItem = retrieveItem(productId);
+    int originalCount = orderItem.getCount();
+    orderItem.updateCount(count);
+    this.totalPrice = calculateTotalPrice(items);
+    raiseEvent(new OrderProductChangedEvent(id, productId, originalCount, count));
+}
+```
+
+## CQRS Pattern
+
+The system implements Command Query Responsibility Segregation:
+
+- **Commands** modify order state (CreateOrderCommand, PayOrderCommand, etc.)
+- **Queries** use optimized read models (OrderRepresentation, OrderSummaryRepresentation)
+- **Events** synchronize read models asynchronously via RabbitMQ
+
+The order-query-service consumes events from this service to maintain denormalized views optimized for queries.
+
+## Technology Stack
+
+<CardGroup cols={2}>
+  <Card title="Spring Boot 2.1.4" icon="leaf">
+    Application framework with dependency injection
+  </Card>
+  <Card title="MySQL" icon="database">
+    Primary data store for order persistence
+  </Card>
+  <Card title="RabbitMQ" icon="rabbit">
+    Message broker for event publishing
+  </Card>
+  <Card title="Zipkin" icon="chart-line">
+    Distributed tracing for observability
+  </Card>
+  <Card title="Gradle" icon="gear">
+    Build automation and dependency management
+  </Card>
+  <Card title="Lombok" icon="hammer">
+    Reduces boilerplate with annotations
+  </Card>
+</CardGroup>
+
+## Component Structure
+
+The project is organized into two modules:
+
+### ecommerce-order-service-api
+
+The main application module containing:
+
+- **Controllers** - REST API endpoints (`OrderController`, `AboutController`)
+- **Application Services** - Orchestration layer (`OrderApplicationService`)
+- **Domain Model** - Core business logic (`Order`, `OrderItem`, `OrderStatus`)
+- **Repositories** - Data access (`OrderRepository`)
+- **Configuration** - RabbitMQ, database, Spring configuration
+
+### ecommerce-order-service-sdk
+
+Published SDK for integration containing:
+
+- **Commands** - Request DTOs for API endpoints
+- **Events** - Domain events published to RabbitMQ
+- **Representations** - Response DTOs for API queries
+
+The SDK is published to a Maven repository and consumed by other microservices in the e-commerce platform.
+
+## Design Principles
+
+1. **Encapsulation** - Business logic is encapsulated in the domain model
+2. **Invariants** - The Order aggregate enforces all business rules
+3. **Immutability** - Events and representations are immutable
+4. **Separation of Concerns** - Clear boundaries between layers
+5. **Testability** - Multi-level testing strategy (unit, component, API)
+
+<Tip>
+The architecture supports independent deployment and scaling. The service can be scaled horizontally, and events enable loose coupling with other microservices.
+</Tip>

@@ -1,0 +1,86 @@
+---
+title: 'Installation'
+description: 'Add the Ecommerce Order Service SDK to your project'
+---
+
+The Ecommerce Order Service SDK provides Java client libraries for interacting with the order service, including command classes, event classes, and representation models.
+
+## Maven Dependency
+
+Add the following dependency to your `pom.xml`:
+
+<CodeGroup>
+
+```xml Maven
+<dependency>
+    <groupId>com.ecommerce</groupId>
+    <artifactId>ecommerce-order-service-sdk</artifactId>
+    <version>0.1-SNAPSHOT</version>
+</dependency>
+```
+
+```groovy Gradle
+dependencies {
+    implementation 'com.ecommerce:ecommerce-order-service-sdk:0.1-SNAPSHOT'
+}
+```
+
+```kotlin Gradle (Kotlin DSL)
+dependencies {
+    implementation("com.ecommerce:ecommerce-order-service-sdk:0.1-SNAPSHOT")
+}
+```
+
+</CodeGroup>
+
+## Repository Configuration
+
+If you're using the snapshot version, ensure your build configuration includes the snapshot repository:
+
+<CodeGroup>
+
+```xml Maven
+<repositories>
+    <repository>
+        <id>mymavenrepo</id>
+        <url>https://mymavenrepo.com/repo/2w5k9sU2AsKfaYehyqno/</url>
+    </repository>
+</repositories>
+```
+
+```groovy Gradle
+repositories {
+    maven { url 'https://mymavenrepo.com/repo/2w5k9sU2AsKfaYehyqno/' }
+}
+```
+
+</CodeGroup>
+
+## What's Included
+
+The SDK includes:
+
+- **Command Classes**: For creating and modifying orders
+- **Event Classes**: Domain events published by the order service
+- **Representation Classes**: Response models for API endpoints
+- **Validation**: Built-in Bean Validation constraints
+
+## Requirements
+
+- Java 8 or higher
+- Spring Boot (for validation annotations)
+- Lombok (annotation processor)
+
+## Next Steps
+
+<CardGroup cols={3}>
+  <Card title="Commands" icon="terminal" href="/sdk/commands">
+    Learn about command classes for order operations
+  </Card>
+  <Card title="Events" icon="bolt" href="/sdk/events">
+    Understand domain events published by the service
+  </Card>
+  <Card title="Models" icon="cube" href="/sdk/models">
+    Explore representation classes for API responses
+  </Card>
+</CardGroup>
